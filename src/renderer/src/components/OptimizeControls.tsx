@@ -30,7 +30,8 @@ export const OptimizeControls: React.FC = () => {
     monitorRef.current = setInterval(async () => {
       const running = await window.api.getProcesses()
       if (!running.some(p => p.pid === selectedGamePid)) {
-        addStatusEntry({ pid: 0, name: 'Monitor', status: 'pending', message: 'Game closed — auto-restoring…' })
+        addStatusEntry({ pid: 0, name: 'monitor', status: 'pending',
+          message: `[WATCH] game process exited (pid=${selectedGamePid}) — triggering auto-restore` })
         await doRestore()
       }
     }, 5000)
@@ -47,28 +48,59 @@ export const OptimizeControls: React.FC = () => {
       .map(p => ({ pid: p.pid, name: p.name, priority: p.priority || 'Normal', ioNormal: true }))
     saveSnapshot(snap)
 
-    addStatusEntry({ pid: 0, name: 'System', status: 'pending', message: `Applying "${preset}" preset…` })
-
     const bgProcs = processes
       .filter(p => p.pid !== selectedGamePid && !isProtected(p.name))
       .map(p => ({ pid: p.pid, name: p.name }))
 
+    const totalTargets = bgProcs.length + 1
+
+    // Phase 1: Init
+    addStatusEntry({ pid: 0, name: 'truescript', status: 'pending',
+      message: `[INIT] preset=${preset.toUpperCase()} · targets=${totalTargets} processes · snapshot saved` })
+
+    // Phase 2: Compose
+    const presetMap = { minimum: 'GAME→HIGH  BG→NORMAL  IO→default', normal: 'GAME→HIGH  BG→BELOW_NORMAL  IO→LOW', maximum: 'GAME→HIGH  BG→IDLE  IO→LOW' }
+    addStatusEntry({ pid: 0, name: 'scheduler', status: 'pending',
+      message: `[PLAN] ${presetMap[preset]}` })
+
+    const t0 = performance.now()
+
     try {
+      // Phase 3: Dispatch
+      addStatusEntry({ pid: 0, name: 'powershell', status: 'pending',
+        message: `[EXEC] dispatching single-batch script → ${totalTargets} pid entries` })
+
       const results = await window.api.batchOptimize(selectedGamePid, selectedGameName || 'game', bgProcs, preset)
+
+      const elapsed = Math.round(performance.now() - t0)
+
+      // Phase 4: Per-process results
       for (const r of results) {
+        const isGame = r.pid === selectedGamePid
         addStatusEntry({
           pid: r.pid, name: r.name,
           status: r.skipped ? 'skipped' : r.success ? 'success' : 'failed',
-          message: r.skipped ? `Skipped — ${r.reason || 'protected'}`
-            : r.success ? (r.pid === selectedGamePid ? 'Priority → High ✓' : 'Priority throttled ✓')
-            : `Failed: ${r.reason}`
+          message: r.skipped
+            ? `[SKIP] ${r.reason || 'protected system process — untouched'}`
+            : r.success
+              ? isGame
+                ? `[SET] priority=${preset === 'minimum' ? 'HIGH' : 'HIGH'} · game process boosted`
+                : `[SET] priority=${preset === 'minimum' ? 'NORMAL' : preset === 'normal' ? 'BELOW_NORMAL' : 'IDLE'}${preset !== 'minimum' ? ' · io=LOW' : ''}`
+              : `[FAIL] ${r.reason ?? 'unknown error'}`
         })
       }
-      const ok = results.filter(r => r.success).length
-      addStatusEntry({ pid: 0, name: 'Done', status: 'success', message: `Complete — ${ok}/${results.length} processes adjusted` })
+
+      // Phase 5: Summary
+      const ok      = results.filter(r => r.success).length
+      const failed  = results.filter(r => !r.success && !r.skipped).length
+      const skipped = results.filter(r => r.skipped).length
+      addStatusEntry({ pid: 0, name: 'truescript', status: 'success',
+        message: `[DONE] ${ok} set · ${failed} err · ${skipped} skip · elapsed=${elapsed}ms` })
       setIsOptimized(true)
     } catch (err) {
-      addStatusEntry({ pid: 0, name: 'Error', status: 'failed', message: String(err) })
+      const elapsed = Math.round(performance.now() - t0)
+      addStatusEntry({ pid: 0, name: 'truescript', status: 'failed',
+        message: `[FATAL] ${String(err)} (${elapsed}ms)` })
     } finally {
       setIsOptimizing(false)
     }
@@ -78,22 +110,38 @@ export const OptimizeControls: React.FC = () => {
   const doRestore = useCallback(async () => {
     if (snapshot.length === 0) return
     setIsRestoring(true)
-    addStatusEntry({ pid: 0, name: 'System', status: 'pending', message: 'Restoring original priorities…' })
+
+    const t0 = performance.now()
+    addStatusEntry({ pid: 0, name: 'truescript', status: 'pending',
+      message: `[RESTORE] snapshot=${snapshot.length} entries · reverting all priority changes` })
+    addStatusEntry({ pid: 0, name: 'powershell', status: 'pending',
+      message: `[EXEC] dispatching restore batch script → ${snapshot.filter(e => !isProtected(e.name)).length} pid entries` })
+
     try {
       const results = await window.api.restoreSnapshot(snapshot)
+      const elapsed = Math.round(performance.now() - t0)
+
       for (const r of results) {
         addStatusEntry({
           pid: r.pid, name: r.name,
           status: r.skipped ? 'skipped' : r.success ? 'success' : 'failed',
-          message: r.skipped ? `Skipped — ${r.reason || 'not found'}`
-            : r.success ? 'Priority restored ✓'
-            : `Failed: ${r.reason}`
+          message: r.skipped
+            ? `[SKIP] ${r.reason || 'not found — may have exited'}`
+            : r.success
+              ? `[RST] priority restored to original`
+              : `[FAIL] ${r.reason ?? 'unknown error'}`
         })
       }
-      const ok = results.filter(r => r.success).length
-      addStatusEntry({ pid: 0, name: 'Done', status: 'success', message: `Restored — ${ok}/${results.length} processes` })
+
+      const ok      = results.filter(r => r.success).length
+      const failed  = results.filter(r => !r.success && !r.skipped).length
+      const skipped = results.filter(r => r.skipped).length
+      addStatusEntry({ pid: 0, name: 'truescript', status: 'success',
+        message: `[DONE] ${ok} restored · ${failed} err · ${skipped} skip · elapsed=${elapsed}ms` })
     } catch (err) {
-      addStatusEntry({ pid: 0, name: 'Error', status: 'failed', message: String(err) })
+      const elapsed = Math.round(performance.now() - t0)
+      addStatusEntry({ pid: 0, name: 'truescript', status: 'failed',
+        message: `[FATAL] ${String(err)} (${elapsed}ms)` })
     } finally {
       clearSnapshot()
       setIsOptimized(false)

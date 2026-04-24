@@ -491,3 +491,29 @@ body::after {
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
+
+/* ─── Terminal log animations ────────────────────────────────────────────── */
+@keyframes logSlideIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes termPulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
+  50%       { opacity: 1;   transform: scale(1); }
+}
+
+@keyframes termBlink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.animate-log-in {
+  animation: logSlideIn 0.18s var(--ease) both;
+}
+
+/* ─── Terminal log line hover ─────────────────────────────────────────────── */
+.log-line:hover {
+  background: rgba(124,106,255,0.03) !important;
+}
+
