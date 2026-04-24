@@ -274,18 +274,28 @@ export const StatusFeed: React.FC = () => {
     setAutoScroll(scrollTop + clientHeight >= scrollHeight - 20)
   }
 
-  const successCount = useMemo(() => statusFeed.filter(e => e.status === 'success').length, [statusFeed])
-  const failedCount  = useMemo(() => statusFeed.filter(e => e.status === 'failed').length,  [statusFeed])
-  const skippedCount = useMemo(() => statusFeed.filter(e => e.status === 'skipped').length, [statusFeed])
-  const pendingCount = useMemo(() => statusFeed.filter(e => e.status === 'pending').length, [statusFeed])
+  // Single O(n) pass to get all counts — replaces 4 separate .filter() calls
+  const stats = useMemo(() => {
+    let success = 0, failed = 0, skipped = 0, pending = 0
+    for (const e of statusFeed) {
+      if (e.status === 'success') success++
+      else if (e.status === 'failed') failed++
+      else if (e.status === 'skipped') skipped++
+      else if (e.status === 'pending') pending++
+    }
+    return { success, failed, skipped, pending }
+  }, [statusFeed])
+  const { success: successCount, failed: failedCount, skipped: skippedCount, pending: pendingCount } = stats
 
-  const filteredFeed = useMemo(() => {
-    if (filter === 'all') return statusFeed
-    return statusFeed.filter(e => e.status === filter)
-  }, [statusFeed, filter])
+  const filteredFeed = useMemo(() =>
+    filter === 'all' ? statusFeed : statusFeed.filter(e => e.status === filter)
+  , [statusFeed, filter])
 
-  // Display newest at BOTTOM (terminal style) — reverse for render
-  const displayEntries = useMemo(() => [...filteredFeed].reverse(), [filteredFeed])
+  // Display newest at BOTTOM — reverse + cap at 50 entries for render perf
+  const displayEntries = useMemo(() => {
+    const src = filteredFeed.length > 50 ? filteredFeed.slice(0, 50) : filteredFeed
+    return [...src].reverse()
+  }, [filteredFeed])
 
   return (
     <div
@@ -434,6 +444,7 @@ export const StatusFeed: React.FC = () => {
           overflowY: 'auto',
           padding: '4px 0',
           minHeight: 0,
+          contain: 'strict',
           scrollbarWidth: 'thin',
           scrollbarColor: 'rgba(255,255,255,0.06) transparent'
         }}
@@ -495,7 +506,7 @@ export const StatusFeed: React.FC = () => {
             <span style={{ color: '#4a5568', marginLeft: 6 }}>{skippedCount}</span>
             <span style={{ color: '#2d3748' }}> skip</span>
             <span style={{ color: '#2d3748', marginLeft: 8 }}>│</span>
-            <span style={{ color: '#2d3748', marginLeft: 8 }}>{statusFeed.length}/100</span>
+            <span style={{ color: '#2d3748', marginLeft: 8 }}>{statusFeed.length}/50</span>
           </div>
 
           {/* Right: auto-scroll toggle */}

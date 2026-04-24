@@ -59,8 +59,10 @@ const PRESETS: Array<{
   }
 ]
 
-export const PresetSelector: React.FC = () => {
-  const { preset, setPreset, isOptimized } = useAppStore()
+export const PresetSelector: React.FC = React.memo(() => {
+  const preset     = useAppStore(s => s.preset)
+  const setPreset  = useAppStore(s => s.setPreset)
+  const isOptimized= useAppStore(s => s.isOptimized)
 
   return (
     <div className="card" style={{ padding: '14px 14px 12px', flexShrink: 0 }}>
@@ -184,7 +186,8 @@ export const PresetSelector: React.FC = () => {
       </div>
     </div>
   )
-}
+})
+PresetSelector.displayName = 'PresetSelector'
 
 const SpecRow: React.FC<{ label: string; value: string; highlight?: boolean; highlightColor?: string }> = ({
   label, value, highlight, highlightColor = 'var(--orange)'

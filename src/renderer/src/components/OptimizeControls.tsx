@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react'
+import React, { useCallback, useEffect } from 'react'
 import { useAppStore, SnapshotEntry, KNOWN_GAMES } from '../store/useAppStore'
 
 const PROTECTED = new Set([
@@ -15,29 +15,83 @@ export const OptimizeControls: React.FC = () => {
   const {
     processes, selectedGamePid, selectedGameName, preset,
     isOptimized, isOptimizing, isRestoring, snapshot,
+    watcherActive, autoRestoreCount, isShuttingDown,
     saveSnapshot, setIsOptimized, setIsOptimizing, setIsRestoring,
-    clearSnapshot, addStatusEntry, clearStatusFeed
+    clearSnapshot, addStatusEntry, clearStatusFeed,
+    setWatcherActive, incrementAutoRestoreCount, setIsShuttingDown
   } = useAppStore()
 
-  const monitorRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  // Auto-restore watcher
+  // ── Subscribe to backend watcher events ─────────────────────────────────────
   useEffect(() => {
-    if (!isOptimized || selectedGamePid === null) {
-      if (monitorRef.current) clearInterval(monitorRef.current)
-      return
-    }
-    monitorRef.current = setInterval(async () => {
-      const running = await window.api.getProcesses()
-      if (!running.some(p => p.pid === selectedGamePid)) {
-        addStatusEntry({ pid: 0, name: 'monitor', status: 'pending',
-          message: `[WATCH] game process exited (pid=${selectedGamePid}) — triggering auto-restore` })
-        await doRestore()
-      }
-    }, 5000)
-    return () => { if (monitorRef.current) clearInterval(monitorRef.current) }
-  }, [isOptimized, selectedGamePid])
+    // Watcher confirmed active by backend
+    const unsubStarted = window.api.onWatcherStarted(() => {
+      setWatcherActive(true)
+    })
 
+    // Watcher stopped (manual or post-restore)
+    const unsubStopped = window.api.onWatcherStopped(() => {
+      setWatcherActive(false)
+    })
+
+    // Backend detected game exit → auto-restore firing
+    const unsubAutoRestoring = window.api.onWatcherAutoRestoring((data) => {
+      setIsRestoring(true)
+      setWatcherActive(false)
+      addStatusEntry({
+        pid: 0, name: 'monitor', status: 'pending',
+        message: `[WATCH] game process exited (pid=${data.pid}) — triggering auto-restore`
+      })
+    })
+
+    // Backend finished the auto-restore
+    const unsubRestored = window.api.onWatcherRestored((data) => {
+      incrementAutoRestoreCount()
+      addStatusEntry({
+        pid: 0, name: 'monitor', status: 'success',
+        message: `[WATCH] auto-restore complete — ${data.snapshotLength} entries restored`
+      })
+      clearSnapshot()
+      setIsOptimized(false)
+      setIsRestoring(false)
+    })
+
+    // Shutdown sequence events
+    const unsubShutdown = window.api.onShutdownStarted(() => {
+      setIsShuttingDown(true)
+      addStatusEntry({
+        pid: 0, name: 'truescript', status: 'pending',
+        message: '[SHUTDOWN] initiating graceful shutdown…'
+      })
+    })
+
+    const unsubRestoring = window.api.onRestoringBeforeQuit(() => {
+      setIsRestoring(true)
+      addStatusEntry({
+        pid: 0, name: 'truescript', status: 'pending',
+        message: '[SHUTDOWN] restoring all priorities before quit…'
+      })
+    })
+
+    const unsubRestoreComplete = window.api.onRestoreComplete(() => {
+      setIsRestoring(false)
+      addStatusEntry({
+        pid: 0, name: 'truescript', status: 'success',
+        message: '[SHUTDOWN] restore complete — quitting'
+      })
+    })
+
+    return () => {
+      unsubStarted()
+      unsubStopped()
+      unsubAutoRestoring()
+      unsubRestored()
+      unsubShutdown()
+      unsubRestoring()
+      unsubRestoreComplete()
+    }
+  }, [])
+
+  // ── Optimize ─────────────────────────────────────────────────────────────────
   const handleOptimize = useCallback(async () => {
     if (!selectedGamePid || isOptimizing || isRestoring || isOptimized) return
     setIsOptimizing(true)
@@ -59,7 +113,11 @@ export const OptimizeControls: React.FC = () => {
       message: `[INIT] preset=${preset.toUpperCase()} · targets=${totalTargets} processes · snapshot saved` })
 
     // Phase 2: Compose
-    const presetMap = { minimum: 'GAME→HIGH  BG→NORMAL  IO→default', normal: 'GAME→HIGH  BG→BELOW_NORMAL  IO→LOW', maximum: 'GAME→HIGH  BG→IDLE  IO→LOW' }
+    const presetMap = {
+      minimum: 'GAME→HIGH  BG→NORMAL  IO→default',
+      normal:  'GAME→HIGH  BG→BELOW_NORMAL  IO→LOW',
+      maximum: 'GAME→HIGH  BG→IDLE  IO→LOW'
+    }
     addStatusEntry({ pid: 0, name: 'scheduler', status: 'pending',
       message: `[PLAN] ${presetMap[preset]}` })
 
@@ -84,7 +142,7 @@ export const OptimizeControls: React.FC = () => {
             ? `[SKIP] ${r.reason || 'protected system process — untouched'}`
             : r.success
               ? isGame
-                ? `[SET] priority=${preset === 'minimum' ? 'HIGH' : 'HIGH'} · game process boosted`
+                ? `[SET] priority=HIGH · game process boosted`
                 : `[SET] priority=${preset === 'minimum' ? 'NORMAL' : preset === 'normal' ? 'BELOW_NORMAL' : 'IDLE'}${preset !== 'minimum' ? ' · io=LOW' : ''}`
               : `[FAIL] ${r.reason ?? 'unknown error'}`
         })
@@ -96,7 +154,14 @@ export const OptimizeControls: React.FC = () => {
       const skipped = results.filter(r => r.skipped).length
       addStatusEntry({ pid: 0, name: 'truescript', status: 'success',
         message: `[DONE] ${ok} set · ${failed} err · ${skipped} skip · elapsed=${elapsed}ms` })
+
       setIsOptimized(true)
+
+      // ── Hand off monitoring to the backend watcher ──────────────────────────
+      addStatusEntry({ pid: 0, name: 'monitor', status: 'pending',
+        message: `[WATCH] backend watcher started — polling PID ${selectedGamePid} every 5s` })
+      window.api.startWatcher(selectedGamePid, snap)
+
     } catch (err) {
       const elapsed = Math.round(performance.now() - t0)
       addStatusEntry({ pid: 0, name: 'truescript', status: 'failed',
@@ -107,8 +172,9 @@ export const OptimizeControls: React.FC = () => {
   }, [selectedGamePid, selectedGameName, processes, preset, isOptimizing, isRestoring, isOptimized,
       saveSnapshot, addStatusEntry, clearStatusFeed, setIsOptimizing, setIsOptimized])
 
-  const doRestore = useCallback(async () => {
-    if (snapshot.length === 0) return
+  // ── Manual Restore (UI button) ────────────────────────────────────────────────
+  const handleRestore = useCallback(async () => {
+    if (snapshot.length === 0 || isRestoring || isOptimizing) return
     setIsRestoring(true)
 
     const t0 = performance.now()
@@ -118,7 +184,8 @@ export const OptimizeControls: React.FC = () => {
       message: `[EXEC] dispatching restore batch script → ${snapshot.filter(e => !isProtected(e.name)).length} pid entries` })
 
     try {
-      const results = await window.api.restoreSnapshot(snapshot)
+      // Delegate to backend (also stops watcher via watcher:manualRestore)
+      const results = await window.api.manualRestore(snapshot)
       const elapsed = Math.round(performance.now() - t0)
 
       for (const r of results) {
@@ -146,12 +213,18 @@ export const OptimizeControls: React.FC = () => {
       clearSnapshot()
       setIsOptimized(false)
       setIsRestoring(false)
-      if (monitorRef.current) clearInterval(monitorRef.current)
     }
-  }, [snapshot, addStatusEntry, clearSnapshot, setIsOptimized, setIsRestoring])
+  }, [snapshot, addStatusEntry, clearSnapshot, setIsOptimized, setIsRestoring, isRestoring, isOptimizing])
 
-  const canOptimize = selectedGamePid !== null && !isOptimized && !isOptimizing && !isRestoring
-  const canRestore  = isOptimized && snapshot.length > 0 && !isRestoring && !isOptimizing
+  // ── Shutdown ──────────────────────────────────────────────────────────────────
+  const handleShutdown = useCallback(() => {
+    if (isShuttingDown) return
+    window.api.shutdownApp()
+  }, [isShuttingDown])
+
+  // ── Derived state ─────────────────────────────────────────────────────────────
+  const canOptimize = selectedGamePid !== null && !isOptimized && !isOptimizing && !isRestoring && !isShuttingDown
+  const canRestore  = isOptimized && snapshot.length > 0 && !isRestoring && !isOptimizing && !isShuttingDown
   const displayName = selectedGameName
     ? (KNOWN_GAMES[selectedGameName.toLowerCase().replace('.exe', '')] || selectedGameName)
     : null
@@ -174,16 +247,35 @@ export const OptimizeControls: React.FC = () => {
         </div>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-            {isOptimized ? 'Optimized & Monitoring' : 'Optimization Engine'}
+            {isShuttingDown ? 'Shutting Down…' : isOptimized ? 'Optimized & Monitoring' : 'Optimization Engine'}
           </div>
           <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
-            {isOptimized
-              ? `Watching ${selectedGameName || 'game'} for exit…`
+            {isShuttingDown
+              ? 'Restoring priorities before exit…'
+              : isOptimized
+              ? `Backend watcher active — watching PID ${selectedGamePid}`
               : selectedGamePid
               ? `Ready — ${displayName || selectedGameName}`
               : 'Select a game process to begin'}
           </div>
         </div>
+
+        {/* Auto-restore counter badge */}
+        {autoRestoreCount > 0 && (
+          <div style={{
+            marginLeft: 'auto',
+            fontSize: 9,
+            color: 'var(--green)',
+            background: 'var(--green-dim)',
+            border: '1px solid var(--green-border)',
+            borderRadius: 6,
+            padding: '2px 8px',
+            fontFamily: 'var(--font-mono)',
+            fontWeight: 700
+          }}>
+            {autoRestoreCount}× restored
+          </div>
+        )}
       </div>
 
       {/* Target game display */}
@@ -198,7 +290,7 @@ export const OptimizeControls: React.FC = () => {
         <EmptyTarget />
       )}
 
-      {/* Action buttons */}
+      {/* ── Primary action buttons (Optimize + Restore) ── */}
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         {/* Optimize */}
         <button
@@ -229,7 +321,7 @@ export const OptimizeControls: React.FC = () => {
 
         {/* Restore */}
         <button
-          onClick={() => doRestore()}
+          onClick={handleRestore}
           disabled={!canRestore}
           className="btn btn-danger"
           style={{ height: 42, fontSize: 13, minWidth: 100 }}
@@ -251,8 +343,39 @@ export const OptimizeControls: React.FC = () => {
         </button>
       </div>
 
+      {/* ── Shutdown button ── */}
+      <button
+        onClick={handleShutdown}
+        disabled={isShuttingDown}
+        className="btn btn-ghost"
+        style={{
+          width: '100%',
+          height: 34,
+          marginTop: 7,
+          fontSize: 11,
+          color: isShuttingDown ? 'var(--text-muted)' : 'var(--red)',
+          borderColor: isShuttingDown ? 'var(--border)' : 'rgba(255,77,109,0.3)',
+          gap: 6
+        }}
+      >
+        {isShuttingDown ? (
+          <>
+            <Spinner color="var(--red)" />
+            Shutting down…
+          </>
+        ) : (
+          <>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+              <path d="M18.36 6.64a9 9 0 1 1-12.73 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              <line x1="12" y1="2" x2="12" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            Restore & Shutdown App
+          </>
+        )}
+      </button>
+
       {/* Auto-restore notice */}
-      {isOptimized && (
+      {isOptimized && watcherActive && (
         <div
           className="animate-fade-in-up"
           style={{
@@ -266,8 +389,29 @@ export const OptimizeControls: React.FC = () => {
         >
           <div className="status-dot active" style={{ flexShrink: 0 }} />
           <span style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.3 }}>
-            <span style={{ color: 'var(--green)', fontWeight: 600 }}>Auto-restore active — </span>
-            priorities reset when game exits
+            <span style={{ color: 'var(--green)', fontWeight: 600 }}>Backend watcher active — </span>
+            priorities reset when game exits · runs in background
+          </span>
+        </div>
+      )}
+
+      {/* Shutdown-in-progress notice */}
+      {isShuttingDown && (
+        <div
+          className="animate-fade-in-up"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 7,
+            marginTop: 10,
+            padding: '7px 10px',
+            borderRadius: 8,
+            background: 'rgba(255,77,109,0.04)',
+            border: '1px solid rgba(255,77,109,0.2)'
+          }}
+        >
+          <Spinner color="var(--red)" />
+          <span style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.3 }}>
+            <span style={{ color: 'var(--red)', fontWeight: 600 }}>Restoring priorities — </span>
+            app will close automatically
           </span>
         </div>
       )}

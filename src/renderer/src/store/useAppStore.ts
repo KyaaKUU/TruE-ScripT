@@ -46,6 +46,11 @@ export interface AppState {
   isRestoring: boolean
   snapshot: SnapshotEntry[]
 
+  // ── Background watcher (driven by backend IPC events) ─────────────────────
+  watcherActive: boolean
+  autoRestoreCount: number
+  isShuttingDown: boolean
+
   // ── Status feed ───────────────────────────────────────────────────────────
   statusFeed: StatusFeedEntry[]
 
@@ -64,6 +69,11 @@ export interface AppState {
   setIsRestoring: (v: boolean) => void
   saveSnapshot: (snapshot: SnapshotEntry[]) => void
   clearSnapshot: () => void
+
+  // ── Watcher actions ───────────────────────────────────────────────────────
+  setWatcherActive: (v: boolean) => void
+  incrementAutoRestoreCount: () => void
+  setIsShuttingDown: (v: boolean) => void
 
   addStatusEntry: (entry: Omit<StatusFeedEntry, 'id' | 'timestamp'>) => void
   clearStatusFeed: () => void
@@ -100,7 +110,7 @@ export const KNOWN_GAMES: Record<string, string> = {
   'tslgame': 'PUBG',
   'rainbow6': 'Rainbow Six Siege',
   'r6': 'Rainbow Six Siege',
-  'acvalhallarelauncher': 'Assassin\'s Creed Valhalla',
+  'acvalhallarelauncher': "Assassin's Creed Valhalla",
   'rdr2': 'Red Dead Redemption 2',
   'cyberpunk2077': 'Cyberpunk 2077',
   'witcher3': 'The Witcher 3',
@@ -142,6 +152,11 @@ export const useAppStore = create<AppState>((set) => ({
   isRestoring: false,
   snapshot: [],
 
+  // watcher state — driven purely by backend IPC events
+  watcherActive: false,
+  autoRestoreCount: 0,
+  isShuttingDown: false,
+
   statusFeed: [],
 
   // actions
@@ -160,6 +175,10 @@ export const useAppStore = create<AppState>((set) => ({
   saveSnapshot: (snapshot) => set({ snapshot }),
   clearSnapshot: () => set({ snapshot: [] }),
 
+  setWatcherActive: (v) => set({ watcherActive: v }),
+  incrementAutoRestoreCount: () => set((s) => ({ autoRestoreCount: s.autoRestoreCount + 1 })),
+  setIsShuttingDown: (v) => set({ isShuttingDown: v }),
+
   addStatusEntry: (entry) =>
     set((state) => ({
       statusFeed: [
@@ -168,7 +187,7 @@ export const useAppStore = create<AppState>((set) => ({
           id: `feed-${++feedIdCounter}`,
           timestamp: Date.now()
         },
-        ...state.statusFeed.slice(0, 99) // keep last 100
+        ...state.statusFeed.slice(0, 49) // keep last 50
       ]
     })),
 

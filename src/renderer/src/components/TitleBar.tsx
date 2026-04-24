@@ -5,7 +5,7 @@ interface TitleBarProps {
   isScanning: boolean
 }
 
-export const TitleBar: React.FC<TitleBarProps> = ({ isOptimized, isScanning }) => {
+export const TitleBar: React.FC<TitleBarProps> = React.memo(({ isOptimized, isScanning }) => {
   const minimize = () => window.api.minimizeWindow()
   const maximize = () => window.api.maximizeWindow()
   const close    = () => window.api.closeWindow()
@@ -112,7 +112,8 @@ export const TitleBar: React.FC<TitleBarProps> = ({ isOptimized, isScanning }) =
       </div>
     </div>
   )
-}
+})
+TitleBar.displayName = 'TitleBar'
 
 /* ── Status pill ─────────────────────────────────────────────────────────── */
 const StatusPill: React.FC<{ isOptimized: boolean; isScanning: boolean }> = ({ isOptimized, isScanning }) => {
