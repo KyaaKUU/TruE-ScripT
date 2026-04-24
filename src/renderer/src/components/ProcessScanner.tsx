@@ -4,27 +4,27 @@ import { useAppStore, KNOWN_GAMES, ProcessInfo } from '../store/useAppStore'
 // ─── Pure helper maps (computed once, not on every render) ───────────────────
 const priorityBadge = (p: string): { bg: string; color: string; border: string } => {
   switch (p) {
-    case 'High':        return { bg: 'rgba(255,140,66,0.12)', color: 'var(--orange)', border: 'rgba(255,140,66,0.3)' }
+    case 'High': return { bg: 'rgba(255,140,66,0.12)', color: 'var(--orange)', border: 'rgba(255,140,66,0.3)' }
     case 'AboveNormal': return { bg: 'rgba(255,209,102,0.1)', color: 'var(--yellow)', border: 'rgba(255,209,102,0.3)' }
-    case 'Normal':      return { bg: 'rgba(148,163,184,0.07)', color: 'var(--text-secondary)', border: 'var(--border-bright)' }
+    case 'Normal': return { bg: 'rgba(148,163,184,0.07)', color: 'var(--text-secondary)', border: 'var(--border-bright)' }
     case 'BelowNormal': return { bg: 'rgba(107,114,128,0.08)', color: '#6b7280', border: 'rgba(107,114,128,0.25)' }
-    case 'Idle':        return { bg: 'rgba(55,65,81,0.12)', color: '#4b5563', border: 'rgba(55,65,81,0.25)' }
-    default:            return { bg: 'rgba(148,163,184,0.07)', color: 'var(--text-muted)', border: 'var(--border)' }
+    case 'Idle': return { bg: 'rgba(55,65,81,0.12)', color: '#4b5563', border: 'rgba(55,65,81,0.25)' }
+    default: return { bg: 'rgba(148,163,184,0.07)', color: 'var(--text-muted)', border: 'var(--border)' }
   }
 }
 
 const cpuColor = (cpu: number): string => {
   if (cpu > 50) return 'var(--red)'
   if (cpu > 20) return 'var(--orange)'
-  if (cpu > 5)  return 'var(--accent)'
+  if (cpu > 5) return 'var(--accent)'
   return 'var(--text-muted)'
 }
 
 // ─── Adaptive poll intervals ─────────────────────────────────────────────────
-const POLL_IDLE      = 5000   // window visible, no game selected
-const POLL_ACTIVE    = 4000   // window visible, game selected
+const POLL_IDLE = 5000   // window visible, no game selected
+const POLL_ACTIVE = 4000   // window visible, game selected
 const POLL_OPTIMIZED = 12000  // optimized — process list rarely changes, watcher handles exit detection
-const POLL_HIDDEN    = 30000  // window hidden to tray — minimal background refresh
+const POLL_HIDDEN = 30000  // window hidden to tray — minimal background refresh
 
 // ─── Memoised single process row ─────────────────────────────────────────────
 const ProcessRow: React.FC<{
@@ -101,24 +101,25 @@ ProcessRow.displayName = 'ProcessRow'
 // ─── Main component — granular Zustand subscriptions ────────────────────────
 export const ProcessScanner: React.FC = () => {
   // ── Granular selectors (only re-render when THIS slice changes) ────────────
-  const processes      = useAppStore(s => s.processes)
-  const setProcesses   = useAppStore(s => s.setProcesses)
-  const setIsScanning  = useAppStore(s => s.setIsScanning)
-  const setLastScanTime= useAppStore(s => s.setLastScanTime)
-  const setScanError   = useAppStore(s => s.setScanError)
-  const isScanning     = useAppStore(s => s.isScanning)
-  const lastScanTime   = useAppStore(s => s.lastScanTime)
-  const selectedGamePid= useAppStore(s => s.selectedGamePid)
-  const setSelectedGame= useAppStore(s => s.setSelectedGame)
-  const searchQuery    = useAppStore(s => s.searchQuery)
+  const processes = useAppStore(s => s.processes)
+  const setProcesses = useAppStore(s => s.setProcesses)
+  const setIsScanning = useAppStore(s => s.setIsScanning)
+  const setLastScanTime = useAppStore(s => s.setLastScanTime)
+  const setScanError = useAppStore(s => s.setScanError)
+  const isScanning = useAppStore(s => s.isScanning)
+  const lastScanTime = useAppStore(s => s.lastScanTime)
+  const selectedGamePid = useAppStore(s => s.selectedGamePid)
+  const setSelectedGame = useAppStore(s => s.setSelectedGame)
+  const searchQuery = useAppStore(s => s.searchQuery)
   const setSearchQuery = useAppStore(s => s.setSearchQuery)
-  const isOptimized    = useAppStore(s => s.isOptimized)
+  const isOptimized = useAppStore(s => s.isOptimized)
 
-
-  const intervalRef   = useRef<ReturnType<typeof setInterval> | null>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const isScanningRef = useRef(false)          // sync ref avoids stale closure in interval
+  const isOptimizedRef = useRef(isOptimized)     // keep up-to-date for visibility handler
+  const selectedPidRef = useRef(selectedGamePid) // keep up-to-date for visibility handler
   const [autoMsg, setAutoMsg] = useState<string | null>(null)
-  const [sortBy, setSortBy]   = useState<'name' | 'cpu'>('cpu')
+  const [sortBy, setSortBy] = useState<'name' | 'cpu'>('cpu')
 
   // ─── Core scan function (uses ref to avoid stale closure) ─────────────────
   const scan = useCallback(async () => {
@@ -144,14 +145,18 @@ export const ProcessScanner: React.FC = () => {
     intervalRef.current = setInterval(scan, intervalMs)
   }, [scan])
 
+  // Keep refs in sync with latest state for the visibility handler
+  useEffect(() => { isOptimizedRef.current = isOptimized }, [isOptimized])
+  useEffect(() => { selectedPidRef.current = selectedGamePid }, [selectedGamePid])
+
   // ─── Initial scan + visibility-aware adaptive polling ────────────────────
   useEffect(() => {
     scan()
 
     const getInterval = () => {
       if (document.hidden) return POLL_HIDDEN
-      if (isOptimized)     return POLL_OPTIMIZED
-      if (selectedGamePid) return POLL_ACTIVE
+      if (isOptimizedRef.current) return POLL_OPTIMIZED
+      if (selectedPidRef.current) return POLL_ACTIVE
       return POLL_IDLE
     }
 
@@ -164,7 +169,7 @@ export const ProcessScanner: React.FC = () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [])  // deliberately empty — scheduleInterval/scan are stable refs
+  }, [])  // stable — scan/scheduleInterval never change, refs track state
 
   // Reschedule when optimization state changes
   useEffect(() => {
@@ -198,21 +203,21 @@ export const ProcessScanner: React.FC = () => {
     searchQuery
       ? processes.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
       : processes
-  , [processes, searchQuery])
+    , [processes, searchQuery])
 
   const sorted = useMemo(() =>
     sortBy === 'cpu'
       ? [...filtered].sort((a, b) => b.cpu - a.cpu)
       : [...filtered].sort((a, b) => a.name.localeCompare(b.name))
-  , [filtered, sortBy])
+    , [filtered, sortBy])
 
   const selectedProc = useMemo(() =>
     processes.find(p => p.pid === selectedGamePid)
-  , [processes, selectedGamePid])
+    , [processes, selectedGamePid])
 
   const gameCount = useMemo(() =>
     processes.filter(p => KNOWN_GAMES[p.name.toLowerCase().replace('.exe', '')]).length
-  , [processes])
+    , [processes])
 
   const pollLabel = isOptimized ? '12s' : selectedGamePid ? '4s' : '5s'
 
@@ -233,8 +238,8 @@ export const ProcessScanner: React.FC = () => {
               border: '1px solid var(--accent-border)'
             }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-                <circle cx="11" cy="11" r="8" stroke="var(--accent)" strokeWidth="2"/>
-                <path d="m21 21-4.35-4.35" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round"/>
+                <circle cx="11" cy="11" r="8" stroke="var(--accent)" strokeWidth="2" />
+                <path d="m21 21-4.35-4.35" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </div>
             <div>
@@ -269,8 +274,8 @@ export const ProcessScanner: React.FC = () => {
           <div style={{ flex: 1, position: 'relative' }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
               style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }}>
-              <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
-              <path d="m21 21-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
+              <path d="m21 21-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
             <input
               type="text"
@@ -288,7 +293,7 @@ export const ProcessScanner: React.FC = () => {
             style={{ padding: '7px 10px', fontSize: 11, gap: 4 }}
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-              <path d="M3 6h18M7 12h10M11 18h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              <path d="M3 6h18M7 12h10M11 18h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
             {sortBy === 'cpu' ? 'CPU' : 'A-Z'}
           </button>
@@ -299,8 +304,8 @@ export const ProcessScanner: React.FC = () => {
             style={{ padding: '7px 12px', fontSize: 11 }}
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/>
-              <circle cx="12" cy="12" r="3" fill="currentColor"/>
+              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+              <circle cx="12" cy="12" r="3" fill="currentColor" />
             </svg>
             Detect
           </button>
