@@ -6,6 +6,7 @@ export interface ProcessInfo {
   name: string
   priority: string
   cpu: number
+  ram: number
   category?: 'game' | 'background' | 'system'
 }
 

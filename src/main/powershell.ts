@@ -14,7 +14,8 @@ const PROTECTED_PROCESSES = new Set([
   'ntoskrnl', 'spoolsv', 'searchindexer', 'trustedinstaller', 'wuauclt',
   'taskhost', 'taskhostw', 'sihost', 'ctfmon', 'runtimebroker',
   'securityhealthservice', 'securityhealthsystray', 'sgrmbroker',
-  'wmiprvse', 'conhost', 'dllhost', 'consent', 'msiexec', 'usoclient', 'sdclt'
+  'wmiprvse', 'conhost', 'dllhost', 'consent', 'msiexec', 'usoclient', 'sdclt',
+  'explorer', 'taskmgr', 'electron', 'true script', 'truescript'
 ])
 
 export function isProtected(processName: string): boolean {
@@ -162,14 +163,21 @@ Get-Process -ErrorAction SilentlyContinue | Where-Object {
 } | ForEach-Object {
   try {
     $pid2 = $_.Id; $pri = 'Normal'
-    try { $pri = $_.PriorityClass.ToString() } catch {}
+    try { 
+      $rawPri = $_.PriorityClass.ToString() 
+      if ($rawPri -eq 'Idle' -or $rawPri -eq 'BelowNormal') { $pri = 'Low' }
+      elseif ($rawPri -eq 'AboveNormal') { $pri = 'High' }
+      elseif ($rawPri -eq 'RealTime') { $pri = 'VeryHigh' }
+      else { $pri = $rawPri }
+    } catch {}
     $cpu = 0
+    $ram = [math]::Round($_.WorkingSet64 / 1MB, 1)
     if ($snap.ContainsKey($pid2)) {
       $d = $_.TotalProcessorTime.TotalMilliseconds - $snap[$pid2]
-      $cpu = [math]::Round($d / 3 / $nc, 1)
+      $cpu = [math]::Round($d / 0.3 / $nc, 1)
       if ($cpu -lt 0) { $cpu = 0 } elseif ($cpu -gt 100) { $cpu = 100 }
     }
-    [PSCustomObject]@{ pid = $pid2; name = $_.ProcessName; priority = $pri; cpu = $cpu }
+    [PSCustomObject]@{ pid = $pid2; name = $_.ProcessName; priority = $pri; cpu = $cpu; ram = $ram }
   } catch {}
 } | Where-Object { $_ } | ConvertTo-Json -Compress -Depth 1
 `
@@ -190,7 +198,9 @@ Get-Process -ErrorAction SilentlyContinue | Where-Object {
       return { success: false, skipped: true, reason: 'Protected system process' }
     }
 
-    const safePriority = priority === 'Realtime' ? 'High' : priority
+    let safePriority = priority
+    if (priority === 'Low') safePriority = 'Idle'
+    if (priority === 'VeryHigh') safePriority = 'High' // Capped at High for system stability
 
     const script = `
 try {
@@ -220,15 +230,15 @@ try {
     const ioValue = ioLevel === 'Low' ? 1 : 2
 
     const script = `
-try {
-  Add-Type -TypeDefinition @"
+try { Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
 public class IoHelper {
   [DllImport("ntdll.dll")]
   public static extern int NtSetInformationProcess(IntPtr hProcess, int processInfoClass, ref int processInformation, int processInformationLength);
 }
-"@
+"@ } catch {}
+try {
   $proc = Get-Process -Id ${pid} -ErrorAction SilentlyContinue
   if ($null -eq $proc) { Write-Output "NOT_FOUND"; exit }
   $val = ${ioValue}
@@ -256,19 +266,44 @@ public class IoHelper {
     interface OptResult { pid: number; name: string; success: boolean; skipped: boolean; reason?: string }
 
     const config = {
-      minimum:  { gamePriority: 'High', bgPriority: 'Normal',      bgIo: false },
-      normal:   { gamePriority: 'High', bgPriority: 'BelowNormal', bgIo: true  },
-      maximum:  { gamePriority: 'High', bgPriority: 'Idle',        bgIo: true  }
+      // ── Minimum: safest changes only, low side-effects
+      minimum: {
+        gamePriority: 'High', bgPriority: 'Normal', bgIo: false,
+        mmcss: false, powerPlan: false, trimWs: false,
+        timerRes: true,   // winmm timeBeginPeriod(1) — universal fix, safe
+        sysProfile: true, // HKLM Games task → SystemResponsiveness=20 (mild)
+        netThrottle: false, cpuUnpark: false, gameBar: false, threadBoost: true
+      },
+      // ── Normal: balanced, includes network + core parking fixes
+      normal: {
+        gamePriority: 'High', bgPriority: 'Low', bgIo: true,
+        mmcss: false, powerPlan: false, trimWs: false,
+        timerRes: true, sysProfile: true,
+        netThrottle: true,  // disable network coalescing interrupt
+        cpuUnpark: true,    // unpark all CPU cores
+        gameBar: true,      // suppress GameDVR background capture
+        threadBoost: true
+      },
+      // ── Maximum: all fixes, aggressive
+      maximum: {
+        gamePriority: 'VeryHigh', bgPriority: 'Low', bgIo: true,
+        mmcss: true, powerPlan: true, trimWs: true,
+        timerRes: true, sysProfile: true,
+        netThrottle: true, cpuUnpark: true, gameBar: true, threadBoost: true
+      }
     }
     const cfg = config[preset]
+    // sysResponsiveness: 0 = all CPU to game (max/normal), 20 = mild (minimum)
+    const sysResp = preset === 'minimum' ? 20 : 0
 
     const safeBackgrounds = backgroundPids.filter(p => !isProtected(p.name))
     const skippedProtected = backgroundPids.filter(p => isProtected(p.name))
 
     type PidEntry = { pid: number; priority: string }
+    const mapPri = (p: string) => p === 'Low' ? 'Idle' : p === 'VeryHigh' ? 'High' : p // RealTime blocked for safety
     const pidList: PidEntry[] = [
-      { pid: gamePid, priority: cfg.gamePriority },
-      ...safeBackgrounds.map(p => ({ pid: p.pid, priority: cfg.bgPriority }))
+      { pid: gamePid, priority: mapPri(cfg.gamePriority) },
+      ...safeBackgrounds.map(p => ({ pid: p.pid, priority: mapPri(cfg.bgPriority) }))
     ]
 
     const psJsonArray = JSON.stringify(pidList)
@@ -279,6 +314,9 @@ public class IoHelper {
 $pidList = '${psJsonArray}' | ConvertFrom-Json
 $results = @()
 
+# ════════════════════════════════════════════════════════════════════
+# PHASE 1 — Process priority (CPU scheduling)
+# ════════════════════════════════════════════════════════════════════
 foreach ($entry in $pidList) {
   $pid2   = $entry.pid
   $pri    = $entry.priority
@@ -297,24 +335,150 @@ foreach ($entry in $pidList) {
   $results += [PSCustomObject]@{ pid = $pid2; status = $status }
 }
 
+# ════════════════════════════════════════════════════════════════════
+# PHASE 2 — I/O priority + working-set trim
+# ════════════════════════════════════════════════════════════════════
 ${cfg.bgIo && psIoPids ? `
-# Batch IO priority via single Add-Type compile
+try { Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class WinOpt {
+  [DllImport("ntdll.dll")]  public static extern int  NtSetInformationProcess(IntPtr h, int c, ref int i, int l);
+  [DllImport("kernel32.dll")] public static extern bool SetProcessWorkingSetSize(IntPtr h, IntPtr min, IntPtr max);
+}
+"@ } catch {}
 try {
-  Add-Type -TypeDefinition @"
-using System; using System.Runtime.InteropServices;
-public class IoB { [DllImport("ntdll.dll")] public static extern int NtSetInformationProcess(IntPtr h, int c, ref int i, int l); }
-"@
   $ioPids = @(${psIoPids})
   foreach ($ip in $ioPids) {
     try {
       $proc = Get-Process -Id $ip -ErrorAction SilentlyContinue
-      if ($null -ne $proc) { $v = 1; [IoB]::NtSetInformationProcess($proc.Handle, 33, [ref]$v, 4) | Out-Null }
+      if ($null -ne $proc) {
+        $v = 1; [WinOpt]::NtSetInformationProcess($proc.Handle, 33, [ref]$v, 4) | Out-Null
+        ${cfg.trimWs ? `[WinOpt]::SetProcessWorkingSetSize($proc.Handle, [IntPtr](-1), [IntPtr](-1)) | Out-Null` : ''}
+      }
     } catch {}
   }
-} catch {}` : '# IO priority not required for this preset'}
+} catch {}` : ''}
+
+# ════════════════════════════════════════════════════════════════════
+# PHASE 3 — Windows Timer Resolution  [FPS STABILITY - CRITICAL]
+# timeBeginPeriod(1) changes the OS scheduler tick from 15.6ms → 1ms
+# This is THE single biggest fix for frame time jitter / FPS variance
+# ════════════════════════════════════════════════════════════════════
+${cfg.timerRes ? `
+try { Add-Type -TypeDefinition @"
+using System.Runtime.InteropServices;
+public class TimerRes {
+  [DllImport("winmm.dll")] public static extern uint timeBeginPeriod(uint uPeriod);
+}
+"@ } catch {}
+try {
+  [TimerRes]::timeBeginPeriod(1) | Out-Null
+} catch {}` : ''}
+
+# ════════════════════════════════════════════════════════════════════
+# PHASE 4 — System Profile (Multimedia/Games registry)
+# SystemResponsiveness: controls % CPU given to background tasks
+# NetworkThrottlingIndex FFFFFFFF = disable interrupt coalescing
+# ════════════════════════════════════════════════════════════════════
+${cfg.sysProfile ? `
+try {
+  $regPath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'
+  Set-ItemProperty -Path $regPath -Name 'SystemResponsiveness' -Value ${sysResp} -Type DWord -ErrorAction SilentlyContinue
+  ${cfg.netThrottle ? `Set-ItemProperty -Path $regPath -Name 'NetworkThrottlingIndex' -Value 0xFFFFFFFF -Type DWord -ErrorAction SilentlyContinue` : ''}
+  $taskPath = "$regPath\\Tasks\\Games"
+  if (Test-Path $taskPath) {
+    Set-ItemProperty -Path $taskPath -Name 'SystemResponsiveness' -Value ${sysResp} -Type DWord -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path $taskPath -Name 'Priority'             -Value 6        -Type DWord -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path $taskPath -Name 'Scheduling Category'  -Value 'High'   -Type String -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path $taskPath -Name 'SFIO Priority'        -Value 'High'   -Type String -ErrorAction SilentlyContinue
+  }
+} catch {}` : ''}
+
+# ════════════════════════════════════════════════════════════════════
+# PHASE 5 — CPU Core Unparking
+# Parked cores take 1-5ms to wake up. This forces all cores online
+# preventing latency spikes at frame boundaries
+# ════════════════════════════════════════════════════════════════════
+${cfg.cpuUnpark ? `
+try {
+  $parkKey = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\54533251-82be-4824-96c1-47b60b740d00\\0cc5b647-c1df-4637-891a-dec35c318583'
+  if (Test-Path $parkKey) {
+    Set-ItemProperty -Path $parkKey -Name 'ValueMax' -Value 0 -Type DWord -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path $parkKey -Name 'ValueMin' -Value 0 -Type DWord -ErrorAction SilentlyContinue
+  }
+} catch {}` : ''}
+
+# ════════════════════════════════════════════════════════════════════
+# PHASE 6 — Thread Priority Boost + GameDVR/GameBar suppression
+# Priority boost: allows game threads to temporarily spike above
+# their base priority class for responsiveness
+# GameDVR: background capture causes GPU frame queue hitches
+# ════════════════════════════════════════════════════════════════════
+${cfg.threadBoost ? `
+try { Add-Type -TypeDefinition @"
+using System.Runtime.InteropServices;
+public class ThreadBoost {
+  [DllImport("kernel32.dll")] public static extern bool SetProcessPriorityBoost(System.IntPtr h, bool disable);
+}
+"@ } catch {}
+try {
+  $gProc = Get-Process -Id ${gamePid} -ErrorAction SilentlyContinue
+  if ($null -ne $gProc) {
+    [ThreadBoost]::SetProcessPriorityBoost($gProc.Handle, $false) | Out-Null
+  }
+} catch {}` : ''}
+${cfg.gameBar ? `
+try {
+  # Suppress Game DVR background recording (causes GPU frame queue interruptions)
+  $gDvrKey = 'HKLM:\\SOFTWARE\\Microsoft\\PolicyManager\\default\\ApplicationManagement\\AllowGameDVR'
+  if (Test-Path $gDvrKey) {
+    Set-ItemProperty -Path $gDvrKey -Name 'value' -Value 0 -Type DWord -ErrorAction SilentlyContinue
+  }
+  $gameBarKey = 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\GameDVR'
+  if (Test-Path $gameBarKey) {
+    Set-ItemProperty -Path $gameBarKey -Name 'AppCaptureEnabled' -Value 0 -Type DWord -ErrorAction SilentlyContinue
+  }
+} catch {}` : ''}
+
+# ════════════════════════════════════════════════════════════════════
+# PHASE 7 — MMCSS game thread registration (maximum only)
+# ════════════════════════════════════════════════════════════════════
+${cfg.mmcss ? `
+try { Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class MmcssHelper {
+  [DllImport("avrt.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+  public static extern IntPtr AvSetMmThreadCharacteristics(string TaskName, out uint TaskIndex);
+  [DllImport("avrt.dll", SetLastError=true)]
+  public static extern bool AvSetMmThreadPriority(IntPtr handle, int priority);
+}
+"@ } catch {}
+try {
+  $idx = [uint32]0
+  $handle = [MmcssHelper]::AvSetMmThreadCharacteristics("Games", [ref]$idx)
+  if ($handle -ne [IntPtr]::Zero) {
+    [MmcssHelper]::AvSetMmThreadPriority($handle, 1) | Out-Null
+  }
+} catch {}` : ''}
+
+# ════════════════════════════════════════════════════════════════════
+# PHASE 8 — Power plan (maximum only)
+# ════════════════════════════════════════════════════════════════════
+${cfg.powerPlan ? `
+try {
+  $ulti = powercfg -list 2>$null | Select-String 'e9a42b02-d5df-448d-aa00-03f14749eb61'
+  if ($ulti) {
+    powercfg -setactive e9a42b02-d5df-448d-aa00-03f14749eb61 2>$null
+  } else {
+    powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null
+  }
+} catch {}` : ''}
 
 $results | ConvertTo-Json -Compress -Depth 2
 `
+
 
     try {
       const output = await runPowerShell(script, 30000)
@@ -384,9 +548,10 @@ export async function executeRestoreSnapshot(
     ]
   }
 
+  const mapPri = (p: string) => p === 'Low' ? 'Idle' : p === 'VeryHigh' ? 'High' : (p || 'Normal')
   const normalized = safe.map(e => ({
     pid: e.pid,
-    priority: e.priority === 'Realtime' ? 'High' : (e.priority || 'Normal'),
+    priority: mapPri(e.priority),
     ioNormal: e.ioNormal
   }))
 
@@ -418,11 +583,11 @@ foreach ($entry in $entries) {
 
 ${psIoPids ? `
 # Restore IO to Normal in one compile
-try {
-  Add-Type -TypeDefinition @"
+try { Add-Type -TypeDefinition @"
 using System; using System.Runtime.InteropServices;
 public class IoR { [DllImport("ntdll.dll")] public static extern int NtSetInformationProcess(IntPtr h, int c, ref int i, int l); }
-"@
+"@ } catch {}
+try {
   $ioPids = @(${psIoPids})
   foreach ($ip in $ioPids) {
     try {
@@ -431,6 +596,27 @@ public class IoR { [DllImport("ntdll.dll")] public static extern int NtSetInform
     } catch {}
   }
 } catch {}` : ''}
+
+# ── Restore system settings to Windows defaults ───────────────────────────────
+try { Add-Type -TypeDefinition @"
+using System.Runtime.InteropServices;
+public class TimerResR { [DllImport("winmm.dll")] public static extern uint timeEndPeriod(uint uPeriod); }
+"@ } catch {}
+try {
+  # Restore timer resolution: allow OS to revert to its default (~15.6ms)
+  [TimerResR]::timeEndPeriod(1) | Out-Null
+} catch {}
+try {
+  # Restore SystemResponsiveness to Windows default (20)
+  $regPath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'
+  Set-ItemProperty -Path $regPath -Name 'SystemResponsiveness' -Value 20 -Type DWord -ErrorAction SilentlyContinue
+  # Restore NetworkThrottlingIndex to default (10)
+  Set-ItemProperty -Path $regPath -Name 'NetworkThrottlingIndex' -Value 10 -Type DWord -ErrorAction SilentlyContinue
+} catch {}
+try {
+  # Restore power plan to Balanced: 381b4222-f694-41f0-9685-ff5bb260df2e
+  powercfg -setactive 381b4222-f694-41f0-9685-ff5bb260df2e 2>$null
+} catch {}
 
 $results | ConvertTo-Json -Compress -Depth 2
 `

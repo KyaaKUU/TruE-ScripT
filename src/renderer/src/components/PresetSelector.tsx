@@ -1,14 +1,19 @@
 import React from 'react'
 import { useAppStore, OptimizePreset } from '../store/useAppStore'
 
+// ─── Preset definitions ────────────────────────────────────────────────────────
 const PRESETS: Array<{
   id: OptimizePreset
   label: string
-  desc: string
   tag: string
-  gameP: string
-  bgP: string
-  io: string
+  tagColor: string
+  subtitle: string            // one-liner shown under label
+  detail: string              // expanded sentence shown in active banner
+  game: string                // game priority label
+  bg: string                  // background priority label
+  io: string                  // I/O label
+  features: string[]          // chips of what's active
+  missing: string[]           // chips of what's NOT included (greyed)
   accentColor: string
   accentDim: string
   accentBorder: string
@@ -18,11 +23,15 @@ const PRESETS: Array<{
   {
     id: 'minimum',
     label: 'Minimum',
-    desc: 'Safe CPU boost, no side effects',
     tag: 'SAFE',
-    gameP: 'High',
-    bgP: 'Normal',
-    io: 'Normal',
+    tagColor: 'var(--green)',
+    subtitle: 'Gentle boost, zero risk',
+    detail: 'Raises game CPU priority to High and sets a 1 ms system timer for smoother frame pacing. Background apps stay at Normal — safest choice for any PC.',
+    game: 'High',
+    bg: 'Normal',
+    io: 'Unchanged',
+    features: ['1 ms Timer', 'CPU Boost', 'Games Profile'],
+    missing: ['Core Unpark', 'Net Throttle', 'MMCSS', 'Power Plan'],
     accentColor: 'var(--green)',
     accentDim: 'var(--green-dim)',
     accentBorder: 'var(--green-border)',
@@ -32,11 +41,15 @@ const PRESETS: Array<{
   {
     id: 'normal',
     label: 'Normal',
-    desc: 'Balanced FPS gain & stability',
     tag: 'RECOMMENDED',
-    gameP: 'High',
-    bgP: 'BelowNormal',
+    tagColor: 'var(--accent)',
+    subtitle: 'Stable FPS, balanced system',
+    detail: 'Lowers background app priority and I/O, unparks all CPU cores, and disables network interrupt coalescing. Gives the game consistent CPU headroom without aggressive side-effects.',
+    game: 'High',
+    bg: 'Low',
     io: 'Low',
+    features: ['1 ms Timer', 'CPU Boost', 'Games Profile', 'Core Unpark', 'Net Throttle', 'GameDVR Off'],
+    missing: ['MMCSS', 'Power Plan'],
     accentColor: 'var(--accent)',
     accentDim: 'var(--accent-subtle)',
     accentBorder: 'var(--accent-border)',
@@ -46,11 +59,15 @@ const PRESETS: Array<{
   {
     id: 'maximum',
     label: 'Maximum',
-    desc: 'Max FPS — aggressive background throttle',
     tag: 'MAX FPS',
-    gameP: 'High',
-    bgP: 'Idle',
-    io: 'Low',
+    tagColor: 'var(--orange)',
+    subtitle: 'Full stack, lowest latency',
+    detail: 'Everything in Normal plus MMCSS thread registration for the game, High Performance power plan, and background RAM trimming. Best raw performance — slight power draw increase.',
+    game: 'Very High',
+    bg: 'Low',
+    io: 'Low + Trim',
+    features: ['1 ms Timer', 'CPU Boost', 'Games Profile', 'Core Unpark', 'Net Throttle', 'GameDVR Off', 'MMCSS', 'Power Plan', 'RAM Trim'],
+    missing: [],
     accentColor: 'var(--orange)',
     accentDim: 'var(--orange-dim)',
     accentBorder: 'rgba(255,140,66,0.35)',
@@ -59,14 +76,30 @@ const PRESETS: Array<{
   }
 ]
 
+// ─── Feature chip colours ──────────────────────────────────────────────────────
+const CHIP_COLORS: Record<string, { bg: string; color: string; border: string }> = {
+  '1 ms Timer':    { bg: 'rgba(0,229,160,0.1)',    color: 'var(--green)',   border: 'rgba(0,229,160,0.25)' },
+  'CPU Boost':     { bg: 'rgba(0,229,160,0.1)',    color: 'var(--green)',   border: 'rgba(0,229,160,0.25)' },
+  'Games Profile': { bg: 'rgba(0,229,160,0.1)',    color: 'var(--green)',   border: 'rgba(0,229,160,0.25)' },
+  'Core Unpark':   { bg: 'rgba(124,106,255,0.1)',  color: 'var(--accent)',  border: 'rgba(124,106,255,0.25)' },
+  'Net Throttle':  { bg: 'rgba(124,106,255,0.1)',  color: 'var(--accent)',  border: 'rgba(124,106,255,0.25)' },
+  'GameDVR Off':   { bg: 'rgba(124,106,255,0.1)',  color: 'var(--accent)',  border: 'rgba(124,106,255,0.25)' },
+  'MMCSS':         { bg: 'rgba(255,140,66,0.12)',  color: 'var(--orange)',  border: 'rgba(255,140,66,0.3)' },
+  'Power Plan':    { bg: 'rgba(255,140,66,0.12)',  color: 'var(--orange)',  border: 'rgba(255,140,66,0.3)' },
+  'RAM Trim':      { bg: 'rgba(255,140,66,0.12)',  color: 'var(--orange)',  border: 'rgba(255,140,66,0.3)' },
+}
+
 export const PresetSelector: React.FC = React.memo(() => {
-  const preset     = useAppStore(s => s.preset)
-  const setPreset  = useAppStore(s => s.setPreset)
-  const isOptimized= useAppStore(s => s.isOptimized)
+  const preset    = useAppStore(s => s.preset)
+  const setPreset = useAppStore(s => s.setPreset)
+  const isOptimized = useAppStore(s => s.isOptimized)
+
+  const active = PRESETS.find(p => p.id === preset)!
 
   return (
     <div className="card" style={{ padding: '14px 14px 12px', flexShrink: 0 }}>
-      {/* Header */}
+
+      {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
         <div className="icon-box" style={{
           width: 28, height: 28,
@@ -83,12 +116,12 @@ export const PresetSelector: React.FC = React.memo(() => {
             Performance Preset
           </div>
           <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
-            Choose optimization aggressiveness
+            Select before optimizing · locked while active
           </div>
         </div>
       </div>
 
-      {/* Cards */}
+      {/* ── Preset cards ── */}
       <div style={{ display: 'flex', gap: 8 }}>
         {PRESETS.map((p) => {
           const isActive = preset === p.id
@@ -106,7 +139,7 @@ export const PresetSelector: React.FC = React.memo(() => {
                 cursor: isOptimized ? 'not-allowed' : 'pointer'
               }}
             >
-              {/* Bottom bar when active */}
+              {/* Bottom accent bar */}
               <div style={{
                 position: 'absolute',
                 bottom: 0, left: 0, right: 0,
@@ -118,17 +151,13 @@ export const PresetSelector: React.FC = React.memo(() => {
 
               {/* Tag */}
               <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                fontSize: 9,
-                fontWeight: 800,
-                letterSpacing: '0.1em',
-                color: p.accentColor,
+                display: 'inline-flex', alignItems: 'center',
+                fontSize: 8, fontWeight: 800, letterSpacing: '0.12em',
+                color: p.tagColor,
                 background: p.accentDim,
                 border: `1px solid ${p.accentBorder}`,
-                borderRadius: 5,
-                padding: '2px 6px',
-                marginBottom: 8,
+                borderRadius: 4, padding: '2px 6px',
+                marginBottom: 7,
                 fontFamily: 'var(--font-mono)'
               }}>
                 {p.tag}
@@ -136,52 +165,104 @@ export const PresetSelector: React.FC = React.memo(() => {
 
               {/* Label */}
               <div style={{
-                fontSize: 13,
-                fontWeight: 700,
+                fontSize: 13, fontWeight: 700,
                 color: isActive ? p.accentColor : 'var(--text-primary)',
-                marginBottom: 4,
+                marginBottom: 3,
                 transition: 'color 0.15s'
               }}>
                 {p.label}
               </div>
 
-              {/* Description */}
+              {/* Subtitle */}
               <div style={{
-                fontSize: 10,
-                color: 'var(--text-muted)',
-                lineHeight: 1.4,
-                marginBottom: 10
+                fontSize: 10, color: 'var(--text-muted)',
+                lineHeight: 1.35, marginBottom: 10
               }}>
-                {p.desc}
+                {p.subtitle}
               </div>
 
               {/* Spec rows */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <SpecRow label="Game" value={p.gameP} highlight={isActive} highlightColor={p.accentColor} />
-                <SpecRow label="BG" value={p.bgP} />
-                <SpecRow label="I/O" value={p.io} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <SpecRow
+                  label="Game priority"
+                  value={p.game}
+                  highlight={isActive}
+                  highlightColor={p.accentColor}
+                />
+                <SpecRow label="BG priority" value={p.bg} />
+                <SpecRow label="I/O & RAM" value={p.io} />
               </div>
             </button>
           )
         })}
       </div>
 
-      {/* Safety notice */}
+      {/* ── Active preset detail banner ── */}
+      <div style={{
+        marginTop: 10,
+        padding: '9px 11px',
+        borderRadius: 9,
+        background: active.accentDim,
+        border: `1px solid ${active.accentBorder}`,
+        transition: 'all 0.25s'
+      }}>
+        {/* Row 1: what it does */}
+        <div style={{
+          fontSize: 10.5, color: 'var(--text-secondary)',
+          lineHeight: 1.5, marginBottom: 8
+        }}>
+          <span style={{ color: active.accentColor, fontWeight: 700 }}>{active.label}: </span>
+          {active.detail}
+        </div>
+
+        {/* Row 2: feature chips */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {active.features.map(f => {
+            const c = CHIP_COLORS[f] ?? { bg: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', border: 'var(--border)' }
+            return (
+              <span key={f} style={{
+                fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                letterSpacing: '0.06em',
+                padding: '2px 7px', borderRadius: 4,
+                background: c.bg, color: c.color, border: `1px solid ${c.border}`
+              }}>
+                ✓ {f}
+              </span>
+            )
+          })}
+          {active.missing.map(f => (
+            <span key={f} style={{
+              fontSize: 9, fontWeight: 500, fontFamily: 'var(--font-mono)',
+              letterSpacing: '0.06em',
+              padding: '2px 7px', borderRadius: 4,
+              background: 'rgba(255,255,255,0.03)',
+              color: '#2d3748',
+              border: '1px solid rgba(255,255,255,0.06)',
+              textDecoration: 'line-through'
+            }}>
+              {f}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Safety notice ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 7,
-        marginTop: 10,
-        padding: '7px 10px',
-        borderRadius: 8,
-        background: 'rgba(0,229,160,0.04)',
-        border: '1px solid rgba(0,229,160,0.12)'
+        marginTop: 8,
+        padding: '6px 10px',
+        borderRadius: 7,
+        background: 'rgba(255,255,255,0.02)',
+        border: '1px solid var(--border)'
       }}>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style={{ color: 'var(--green)', flexShrink: 0 }}>
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" strokeWidth="2"/>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+          style={{ color: 'var(--text-muted)', flexShrink: 0 }}>
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+            stroke="currentColor" strokeWidth="2"/>
           <path d="m9 12 2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
         </svg>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.3 }}>
-          <span style={{ color: 'var(--green)', fontWeight: 600 }}>Safety locked — </span>
-          Realtime priority blocked · System processes protected
+        <span style={{ fontSize: 9.5, color: 'var(--text-muted)', lineHeight: 1.3 }}>
+          Realtime priority blocked · System processes never touched · All changes auto-restored on exit
         </span>
       </div>
     </div>
@@ -189,21 +270,25 @@ export const PresetSelector: React.FC = React.memo(() => {
 })
 PresetSelector.displayName = 'PresetSelector'
 
-const SpecRow: React.FC<{ label: string; value: string; highlight?: boolean; highlightColor?: string }> = ({
-  label, value, highlight, highlightColor = 'var(--orange)'
-}) => (
+/* ── SpecRow sub-component ─────────────────────────────────────────────────── */
+const SpecRow: React.FC<{
+  label: string
+  value: string
+  highlight?: boolean
+  highlightColor?: string
+}> = ({ label, value, highlight, highlightColor = 'var(--orange)' }) => (
   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-    <span style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{label}</span>
+    <span style={{ fontSize: 9, color: '#2d3748', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+      {label}
+    </span>
     <span style={{
-      fontSize: 10,
-      fontWeight: 700,
+      fontSize: 10, fontWeight: 700,
       fontFamily: 'var(--font-mono)',
       color: highlight
         ? highlightColor
-        : value === 'BelowNormal' ? '#6b7280'
-        : value === 'Idle' ? '#4b5563'
-        : value === 'Low'  ? '#6b7280'
-        : 'var(--text-secondary)'
+        : value === 'Low' || value === 'Low + Trim'
+          ? '#6b7280'
+          : 'var(--text-secondary)'
     }}>
       {value}
     </span>

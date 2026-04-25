@@ -5,10 +5,9 @@ import { useAppStore, KNOWN_GAMES, ProcessInfo } from '../store/useAppStore'
 const priorityBadge = (p: string): { bg: string; color: string; border: string } => {
   switch (p) {
     case 'High': return { bg: 'rgba(255,140,66,0.12)', color: 'var(--orange)', border: 'rgba(255,140,66,0.3)' }
-    case 'AboveNormal': return { bg: 'rgba(255,209,102,0.1)', color: 'var(--yellow)', border: 'rgba(255,209,102,0.3)' }
+    case 'VeryHigh': return { bg: 'rgba(255,209,102,0.1)', color: 'var(--yellow)', border: 'rgba(255,209,102,0.3)' }
     case 'Normal': return { bg: 'rgba(148,163,184,0.07)', color: 'var(--text-secondary)', border: 'var(--border-bright)' }
-    case 'BelowNormal': return { bg: 'rgba(107,114,128,0.08)', color: '#6b7280', border: 'rgba(107,114,128,0.25)' }
-    case 'Idle': return { bg: 'rgba(55,65,81,0.12)', color: '#4b5563', border: 'rgba(55,65,81,0.25)' }
+    case 'Low': return { bg: 'rgba(107,114,128,0.08)', color: '#6b7280', border: 'rgba(107,114,128,0.25)' }
     default: return { bg: 'rgba(148,163,184,0.07)', color: 'var(--text-muted)', border: 'var(--border)' }
   }
 }
@@ -72,6 +71,13 @@ const ProcessRow: React.FC<{
         <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 1 }}>
           {proc.pid}
         </div>
+      </div>
+
+      {/* RAM col */}
+      <div style={{ width: 55, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, marginRight: 8 }}>
+        <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontWeight: 500 }}>
+          {proc.ram >= 1000 ? (proc.ram / 1024).toFixed(1) + ' GB' : Math.round(proc.ram || 0) + ' MB'}
+        </span>
       </div>
 
       {/* CPU col */}
@@ -372,6 +378,7 @@ export const ProcessScanner: React.FC = () => {
         flexShrink: 0
       }}>
         <span style={{ flex: 1, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Process</span>
+        <span style={{ width: 55, textAlign: 'right', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', marginRight: 8 }}>RAM</span>
         <span style={{ width: 52, textAlign: 'right', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>CPU</span>
         <span style={{ width: 80, textAlign: 'center', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', marginLeft: 8 }}>Priority</span>
       </div>

@@ -1,7 +1,19 @@
 import { app, shell, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron'
 import { join } from 'path'
+import { execFile } from 'child_process'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerPowerShellHandlers, executeRestoreSnapshot, destroyPsProcess } from './powershell'
+
+// ─── Fix: Chromium cache "Access is denied" when running as Administrator ─────
+// When requireAdministrator is set, Chromium tries to move its cache from
+// AppData\Roaming. UAC elevation blocks cross-session roaming access → error 0x5.
+// Fix 1: redirect userData to AppData\Local (elevation-safe, no UAC virtualization)
+// Fix 2: disable GPU shader disk cache (not needed for a desktop scheduler app)
+// IMPORTANT: setPath and commandLine switches MUST be called before app.whenReady()
+const localAppData = process.env.LOCALAPPDATA || join(app.getPath('home'), 'AppData', 'Local')
+app.setPath('userData', join(localAppData, 'TruE ScripT'))
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
+app.commandLine.appendSwitch('disk-cache-size', '0')
 
 // ─── Types shared between watcher and IPC ────────────────────────────────────
 interface SnapshotEntry {
@@ -150,14 +162,22 @@ function startWatcher(gamePid: number, snapshot: SnapshotEntry[]): void {
   watcherInterval = setInterval(async () => {
     if (isShuttingDown) return
     try {
-      // Check if game PID is still alive using Node's built-in process signal trick
-      // process.kill(pid, 0) throws if process doesn't exist — no PowerShell needed
+      // Check if game PID is still alive.
+      // NOTE: process.kill(pid,0) is POSIX-only — on Windows it always throws
+      // EPERM for elevated/cross-session processes (e.g. games running as admin),
+      // causing false auto-restores. tasklist /FI is the correct Windows approach.
       let gameRunning = false
       try {
-        process.kill(watcherGamePid!, 0)
-        gameRunning = true
+        const isAlive = await new Promise<boolean>((resolve) =>
+          execFile('tasklist', ['/FI', `PID eq ${watcherGamePid}`, '/NH', '/FO', 'CSV'],
+            { timeout: 3000 },
+            (err, stdout) => resolve(!err && stdout.includes(`"${watcherGamePid}"`))
+          )
+        )
+        gameRunning = isAlive
       } catch {
-        gameRunning = false
+        // If tasklist itself fails, assume running to avoid false restore
+        gameRunning = true
       }
 
       if (!gameRunning) {

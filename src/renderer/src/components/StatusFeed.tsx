@@ -478,7 +478,7 @@ export const StatusFeed: React.FC = () => {
             <LogLine
               key={entry.id}
               entry={entry}
-              index={displayEntries.length - 1 - idx}
+              index={idx}
               totalLines={displayEntries.length}
             />
           ))

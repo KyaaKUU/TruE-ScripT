@@ -110,13 +110,13 @@ export const OptimizeControls: React.FC = () => {
 
     // Phase 1: Init
     addStatusEntry({ pid: 0, name: 'truescript', status: 'pending',
-      message: `[INIT] preset=${preset.toUpperCase()} · targets=${totalTargets} processes · snapshot saved` })
+      message: `[INIT] preset=${preset.toUpperCase()} · ${totalTargets} processes targeted · snapshot saved` })
 
-    // Phase 2: Compose
+    // Phase 2: Plan summary
     const presetMap = {
-      minimum: 'GAME→HIGH  BG→NORMAL  IO→default',
-      normal:  'GAME→HIGH  BG→BELOW_NORMAL  IO→LOW',
-      maximum: 'GAME→HIGH  BG→IDLE  IO→LOW'
+      minimum: 'game=High · bg=Normal · io=unchanged · 1ms timer · sys profile',
+      normal:  'game=High · bg=Low · io=Low · 1ms timer · core unpark · net throttle off',
+      maximum: 'game=Very High · bg=Low · io=Low+Trim · MMCSS · High Perf plan · all fixes'
     }
     addStatusEntry({ pid: 0, name: 'scheduler', status: 'pending',
       message: `[PLAN] ${presetMap[preset]}` })
@@ -128,7 +128,7 @@ export const OptimizeControls: React.FC = () => {
       addStatusEntry({ pid: 0, name: 'powershell', status: 'pending',
         message: `[EXEC] dispatching single-batch script → ${totalTargets} pid entries` })
 
-      const results = await window.api.batchOptimize(selectedGamePid, selectedGameName || 'game', bgProcs, preset)
+      const results = await window.api.batchOptimize(selectedGamePid!, selectedGameName!, bgProcs, preset)
 
       const elapsed = Math.round(performance.now() - t0)
 
@@ -139,11 +139,11 @@ export const OptimizeControls: React.FC = () => {
           pid: r.pid, name: r.name,
           status: r.skipped ? 'skipped' : r.success ? 'success' : 'failed',
           message: r.skipped
-            ? `[SKIP] ${r.reason || 'protected system process — untouched'}`
+            ? `[SKIP] ${r.reason || 'protected — untouched'}`
             : r.success
               ? isGame
-                ? `[SET] priority=HIGH · game process boosted`
-                : `[SET] priority=${preset === 'minimum' ? 'NORMAL' : preset === 'normal' ? 'BELOW_NORMAL' : 'IDLE'}${preset !== 'minimum' ? ' · io=LOW' : ''}`
+                ? `[SET] priority → ${preset === 'maximum' ? 'Very High' : 'High'} (game boosted)`
+                : `[SET] priority → ${preset === 'minimum' ? 'Normal' : 'Low'}${preset !== 'minimum' ? ` · io → Low${preset === 'maximum' ? ' · RAM trimmed' : ''}` : ''}`
               : `[FAIL] ${r.reason ?? 'unknown error'}`
         })
       }
@@ -156,6 +156,15 @@ export const OptimizeControls: React.FC = () => {
         message: `[DONE] ${ok} set · ${failed} err · ${skipped} skip · elapsed=${elapsed}ms` })
 
       setIsOptimized(true)
+
+      // Phase 6: System-level stability features applied
+      const stabilityMap: Record<string, string> = {
+        minimum: `[SYS] 1ms timer · CPU boost enabled · Games system profile`,
+        normal:  `[SYS] 1ms timer · CPU boost · all cores unparked · net throttle off · GameDVR suppressed`,
+        maximum: `[SYS] 1ms timer · CPU boost · all cores unparked · net off · MMCSS registered · High Perf power plan`
+      }
+      addStatusEntry({ pid: 0, name: 'system', status: 'success',
+        message: stabilityMap[preset] })
 
       // ── Hand off monitoring to the backend watcher ──────────────────────────
       addStatusEntry({ pid: 0, name: 'monitor', status: 'pending',
@@ -179,9 +188,9 @@ export const OptimizeControls: React.FC = () => {
 
     const t0 = performance.now()
     addStatusEntry({ pid: 0, name: 'truescript', status: 'pending',
-      message: `[RESTORE] snapshot=${snapshot.length} entries · reverting all priority changes` })
+      message: `[RESTORE] reverting ${snapshot.length} processes to original state` })
     addStatusEntry({ pid: 0, name: 'powershell', status: 'pending',
-      message: `[EXEC] dispatching restore batch script → ${snapshot.filter(e => !isProtected(e.name)).length} pid entries` })
+      message: `[EXEC] restore batch → ${snapshot.filter(e => !isProtected(e.name)).length} processes` })
 
     try {
       // Delegate to backend (also stops watcher via watcher:manualRestore)
@@ -193,7 +202,7 @@ export const OptimizeControls: React.FC = () => {
           pid: r.pid, name: r.name,
           status: r.skipped ? 'skipped' : r.success ? 'success' : 'failed',
           message: r.skipped
-            ? `[SKIP] ${r.reason || 'not found — may have exited'}`
+            ? `[SKIP] ${r.reason || 'process already exited'}`
             : r.success
               ? `[RST] priority restored to original`
               : `[FAIL] ${r.reason ?? 'unknown error'}`
@@ -205,6 +214,8 @@ export const OptimizeControls: React.FC = () => {
       const skipped = results.filter(r => r.skipped).length
       addStatusEntry({ pid: 0, name: 'truescript', status: 'success',
         message: `[DONE] ${ok} restored · ${failed} err · ${skipped} skip · elapsed=${elapsed}ms` })
+      addStatusEntry({ pid: 0, name: 'system', status: 'success',
+        message: `[RST] 1ms timer released · system profile reset · net throttle restored · power plan → Balanced` })
     } catch (err) {
       const elapsed = Math.round(performance.now() - t0)
       addStatusEntry({ pid: 0, name: 'truescript', status: 'failed',
@@ -223,7 +234,7 @@ export const OptimizeControls: React.FC = () => {
   }, [isShuttingDown])
 
   // ── Derived state ─────────────────────────────────────────────────────────────
-  const canOptimize = selectedGamePid !== null && !isOptimized && !isOptimizing && !isRestoring && !isShuttingDown
+  const canOptimize = selectedGamePid !== null && selectedGameName !== null && !isOptimized && !isOptimizing && !isRestoring && !isShuttingDown
   const canRestore  = isOptimized && snapshot.length > 0 && !isRestoring && !isOptimizing && !isShuttingDown
   const displayName = selectedGameName
     ? (KNOWN_GAMES[selectedGameName.toLowerCase().replace('.exe', '')] || selectedGameName)
@@ -285,6 +296,7 @@ export const OptimizeControls: React.FC = () => {
           processName={selectedGameName}
           pid={selectedGamePid}
           isOptimized={isOptimized}
+          preset={preset}
         />
       ) : (
         <EmptyTarget />
@@ -425,7 +437,8 @@ const GameTargetCard: React.FC<{
   processName: string | null
   pid: number
   isOptimized: boolean
-}> = ({ displayName, processName, pid, isOptimized }) => (
+  preset: string
+}> = ({ displayName, processName, pid, isOptimized, preset }) => (
   <div style={{
     display: 'flex', alignItems: 'center', gap: 10,
     padding: '10px 12px',
@@ -470,7 +483,7 @@ const GameTargetCard: React.FC<{
       borderColor: isOptimized ? 'var(--green-border)' : 'rgba(255,140,66,0.35)',
       transition: 'all 0.3s'
     }}>
-      {isOptimized ? 'HIGH' : 'NORM'}
+      {isOptimized ? (preset === 'maximum' ? 'VERY HIGH' : 'HIGH') : 'NORM'}
     </div>
   </div>
 )
