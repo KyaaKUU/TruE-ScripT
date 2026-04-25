@@ -116,9 +116,9 @@ export const OptimizeControls: React.FC = () => {
 
     // Phase 2: Plan summary
     const presetMap = {
-      minimum: 'game=High · bg=Normal · io=unchanged · 1ms timer · sys profile',
-      normal:  'game=High · bg=Low · io=unchanged · 1ms timer · core unpark · net throttle off',
-      maximum: 'game=Very High · bg=Low · io=Low+Trim · MMCSS · High Perf plan · all fixes'
+      minimum: 'game=AboveNormal · bg=Normal · 0.5ms timer',
+      normal:  'game=High · bg=Normal · 0.5ms timer · sys profile',
+      maximum: 'game=High · bg=BelowNormal · High Perf plan'
     }
     addStatusEntry({ pid: 0, name: 'scheduler', status: 'pending',
       message: `[PLAN] ${presetMap[preset]}` })
@@ -144,8 +144,8 @@ export const OptimizeControls: React.FC = () => {
             ? `[SKIP] ${r.reason || 'protected — untouched'}`
             : r.success
               ? isGame
-                ? `[SET] priority → ${preset === 'maximum' ? 'Very High' : 'High'} (game boosted)`
-                : `[SET] priority → ${preset === 'minimum' ? 'Normal' : 'Low'}${preset === 'maximum' ? ' · io → Low · RAM trimmed' : ''}`
+                ? `[SET] priority → ${preset === 'minimum' ? 'Above Normal' : 'High'} (game boosted)`
+                : `[SET] priority → ${preset === 'minimum' ? 'Normal' : 'Below Normal'}${preset === 'maximum' ? ' · io → Low' : ''}`
               : `[FAIL] ${r.reason ?? 'unknown error'}`
         })
       }
@@ -161,9 +161,9 @@ export const OptimizeControls: React.FC = () => {
 
       // Phase 6: System-level stability features applied
       const stabilityMap: Record<string, string> = {
-        minimum: `[SYS] 1ms timer · CPU boost enabled · Games system profile`,
-        normal:  `[SYS] 1ms timer · CPU boost · all cores unparked · net throttle off · GameDVR suppressed`,
-        maximum: `[SYS] 1ms timer · CPU boost · all cores unparked · net off · MMCSS registered · High Perf power plan`
+        minimum: `[SYS] 0.5ms timer set`,
+        normal:  `[SYS] 0.5ms timer · Games system profile`,
+        maximum: `[SYS] 0.5ms timer · Games system profile · High Perf plan`
       }
       addStatusEntry({ pid: 0, name: 'system', status: 'success',
         message: stabilityMap[preset] })

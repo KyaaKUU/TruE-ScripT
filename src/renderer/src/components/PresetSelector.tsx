@@ -26,12 +26,12 @@ const PRESETS: Array<{
     tag: 'SAFE',
     tagColor: 'var(--green)',
     subtitle: 'Gentle boost, zero risk',
-    detail: 'Raises game CPU priority to High and sets a 1 ms system timer for smoother frame pacing. Background apps stay at Normal — safest choice for any PC.',
-    game: 'High',
+    detail: 'Raises game CPU priority to Above Normal and sets a 0.5 ms system timer for smoother frame pacing. Safest choice for any PC.',
+    game: 'Above Normal',
     bg: 'Normal',
     io: 'Unchanged',
-    features: ['1 ms Timer', 'CPU Boost', 'Games Profile'],
-    missing: ['Core Unpark', 'Net Throttle', 'MMCSS', 'Power Plan'],
+    features: ['0.5 ms Timer'],
+    missing: ['Games Profile', 'Power Plan'],
     accentColor: 'var(--green)',
     accentDim: 'var(--green-dim)',
     accentBorder: 'var(--green-border)',
@@ -44,12 +44,12 @@ const PRESETS: Array<{
     tag: 'RECOMMENDED',
     tagColor: 'var(--accent)',
     subtitle: 'Stable FPS, balanced system',
-    detail: 'Lowers background app priority and I/O, unparks all CPU cores, and disables network interrupt coalescing. Gives the game consistent CPU headroom without aggressive side-effects.',
+    detail: 'Raises game priority to High and applies Windows Games profile. Gives the game consistent CPU headroom without aggressive side-effects.',
     game: 'High',
-    bg: 'Low',
-    io: 'Low',
-    features: ['1 ms Timer', 'CPU Boost', 'Games Profile', 'Core Unpark', 'Net Throttle', 'GameDVR Off'],
-    missing: ['MMCSS', 'Power Plan'],
+    bg: 'Normal',
+    io: 'Unchanged',
+    features: ['0.5 ms Timer', 'Games Profile'],
+    missing: ['Power Plan'],
     accentColor: 'var(--accent)',
     accentDim: 'var(--accent-subtle)',
     accentBorder: 'var(--accent-border)',
@@ -62,11 +62,11 @@ const PRESETS: Array<{
     tag: 'MAX FPS',
     tagColor: 'var(--orange)',
     subtitle: 'Full stack, lowest latency',
-    detail: 'Everything in Normal plus MMCSS thread registration for the game, High Performance power plan, and background RAM trimming. Best raw performance — slight power draw increase.',
-    game: 'Very High',
-    bg: 'Low',
-    io: 'Low + Trim',
-    features: ['1 ms Timer', 'CPU Boost', 'Games Profile', 'Core Unpark', 'Net Throttle', 'GameDVR Off', 'MMCSS', 'Power Plan', 'RAM Trim'],
+    detail: 'Everything in Normal plus High Performance power plan, and gently lowers background app priority to Below Normal. Best safe performance.',
+    game: 'High',
+    bg: 'Below Normal',
+    io: 'Unchanged',
+    features: ['0.5 ms Timer', 'Games Profile', 'Power Plan'],
     missing: [],
     accentColor: 'var(--orange)',
     accentDim: 'var(--orange-dim)',
@@ -78,15 +78,9 @@ const PRESETS: Array<{
 
 // ─── Feature chip colours ──────────────────────────────────────────────────────
 const CHIP_COLORS: Record<string, { bg: string; color: string; border: string }> = {
-  '1 ms Timer':    { bg: 'rgba(0,229,160,0.1)',    color: 'var(--green)',   border: 'rgba(0,229,160,0.25)' },
-  'CPU Boost':     { bg: 'rgba(0,229,160,0.1)',    color: 'var(--green)',   border: 'rgba(0,229,160,0.25)' },
+  '0.5 ms Timer':  { bg: 'rgba(0,229,160,0.1)',    color: 'var(--green)',   border: 'rgba(0,229,160,0.25)' },
   'Games Profile': { bg: 'rgba(0,229,160,0.1)',    color: 'var(--green)',   border: 'rgba(0,229,160,0.25)' },
-  'Core Unpark':   { bg: 'rgba(124,106,255,0.1)',  color: 'var(--accent)',  border: 'rgba(124,106,255,0.25)' },
-  'Net Throttle':  { bg: 'rgba(124,106,255,0.1)',  color: 'var(--accent)',  border: 'rgba(124,106,255,0.25)' },
-  'GameDVR Off':   { bg: 'rgba(124,106,255,0.1)',  color: 'var(--accent)',  border: 'rgba(124,106,255,0.25)' },
-  'MMCSS':         { bg: 'rgba(255,140,66,0.12)',  color: 'var(--orange)',  border: 'rgba(255,140,66,0.3)' },
   'Power Plan':    { bg: 'rgba(255,140,66,0.12)',  color: 'var(--orange)',  border: 'rgba(255,140,66,0.3)' },
-  'RAM Trim':      { bg: 'rgba(255,140,66,0.12)',  color: 'var(--orange)',  border: 'rgba(255,140,66,0.3)' },
 }
 
 export const PresetSelector: React.FC = React.memo(() => {
@@ -262,7 +256,7 @@ export const PresetSelector: React.FC = React.memo(() => {
           <path d="m9 12 2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
         </svg>
         <span style={{ fontSize: 9.5, color: 'var(--text-muted)', lineHeight: 1.3 }}>
-          Realtime priority blocked · System processes never touched · All changes auto-restored on exit
+          System processes never touched · All changes auto-restored on exit
         </span>
       </div>
     </div>
@@ -286,7 +280,7 @@ const SpecRow: React.FC<{
       fontFamily: 'var(--font-mono)',
       color: highlight
         ? highlightColor
-        : value === 'Low' || value === 'Low + Trim'
+        : value === 'Below Normal' || value === 'Low + Trim' || value === 'Low'
           ? '#6b7280'
           : 'var(--text-secondary)'
     }}>

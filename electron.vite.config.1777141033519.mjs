@@ -1,0 +1,51 @@
+// electron.vite.config.ts
+import { defineConfig, externalizeDepsPlugin } from "electron-vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import { resolve } from "path";
+var electron_vite_config_default = defineConfig({
+  main: {
+    plugins: [externalizeDepsPlugin()],
+    build: {
+      minify: true,
+      rollupOptions: {
+        output: { manualChunks: void 0 }
+        // single main chunk — small file
+      }
+    }
+  },
+  preload: {
+    plugins: [externalizeDepsPlugin()],
+    build: { minify: true }
+  },
+  renderer: {
+    resolve: {
+      alias: {
+        "@renderer": resolve("src/renderer/src"),
+        "@": resolve("src/renderer/src")
+      }
+    },
+    plugins: [react(), tailwindcss()],
+    build: {
+      // Tree-shake, minify, and split vendor chunks for faster initial parse
+      minify: "esbuild",
+      chunkSizeWarningLimit: 1e3,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            "vendor-react": ["react", "react-dom"],
+            "vendor-zustand": ["zustand"]
+          }
+        }
+      }
+    },
+    // Disable sourcemaps in production to reduce memory footprint
+    esbuild: {
+      // Remove console.log in production builds
+      drop: process.env.NODE_ENV === "production" ? ["console", "debugger"] : []
+    }
+  }
+});
+export {
+  electron_vite_config_default as default
+};

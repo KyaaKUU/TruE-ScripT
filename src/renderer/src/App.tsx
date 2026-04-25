@@ -87,11 +87,11 @@ function App(): React.JSX.Element {
         {/* RIGHT — Stacked controls */}
         <div style={{
           display: 'flex', flexDirection: 'column',
-          gap: 10, minHeight: 0, overflow: 'hidden'
+          gap: 10, minHeight: 0, overflowY: 'auto', paddingRight: 4
         }}>
           <PresetSelector />
           <OptimizeControls />
-          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <div style={{ flex: 1, minHeight: 250, display: 'flex', flexDirection: 'column' }}>
             <StatusFeed />
           </div>
         </div>
@@ -115,7 +115,7 @@ const StatusBar: React.FC = React.memo(() => (
     flexShrink: 0, position: 'relative', zIndex: 10
   }}>
     <StatusChip color="var(--green)"  icon={<ShieldIcon />}   label={`${PROTECTED.size} system processes protected`} />
-    <StatusChip color="var(--orange)" icon={<AlertIcon />}    label="Realtime priority blocked" />
+    <StatusChip color="var(--orange)" icon={<AlertIcon />}    label="Realtime priority blocked for safety" />
     <StatusChip color="var(--accent)" icon={<TerminalIcon />} label="Running as Administrator" />
   </div>
 ))
