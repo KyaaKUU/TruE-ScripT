@@ -7,7 +7,9 @@ const PROTECTED = new Set([
   'ntoskrnl','spoolsv','searchindexer','trustedinstaller','wuauclt',
   'taskhost','taskhostw','sihost','ctfmon','runtimebroker',
   'securityhealthservice','securityhealthsystray','sgrmbroker',
-  'wmiprvse','conhost','dllhost','consent','msiexec','usoclient','sdclt'
+  'wmiprvse','conhost','dllhost','consent','msiexec','usoclient','sdclt',
+  'explorer','taskmgr','electron','true script','truescript',
+  'nvdisplay.container','rtss','hoyoplay','starrail','easyanticheat'
 ])
 const isProtected = (name: string) => PROTECTED.has(name.toLowerCase().replace('.exe', ''))
 
@@ -115,7 +117,7 @@ export const OptimizeControls: React.FC = () => {
     // Phase 2: Plan summary
     const presetMap = {
       minimum: 'game=High · bg=Normal · io=unchanged · 1ms timer · sys profile',
-      normal:  'game=High · bg=Low · io=Low · 1ms timer · core unpark · net throttle off',
+      normal:  'game=High · bg=Low · io=unchanged · 1ms timer · core unpark · net throttle off',
       maximum: 'game=Very High · bg=Low · io=Low+Trim · MMCSS · High Perf plan · all fixes'
     }
     addStatusEntry({ pid: 0, name: 'scheduler', status: 'pending',
@@ -143,7 +145,7 @@ export const OptimizeControls: React.FC = () => {
             : r.success
               ? isGame
                 ? `[SET] priority → ${preset === 'maximum' ? 'Very High' : 'High'} (game boosted)`
-                : `[SET] priority → ${preset === 'minimum' ? 'Normal' : 'Low'}${preset !== 'minimum' ? ` · io → Low${preset === 'maximum' ? ' · RAM trimmed' : ''}` : ''}`
+                : `[SET] priority → ${preset === 'minimum' ? 'Normal' : 'Low'}${preset === 'maximum' ? ' · io → Low · RAM trimmed' : ''}`
               : `[FAIL] ${r.reason ?? 'unknown error'}`
         })
       }

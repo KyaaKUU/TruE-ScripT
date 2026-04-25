@@ -15,7 +15,8 @@ const PROTECTED_PROCESSES = new Set([
   'taskhost', 'taskhostw', 'sihost', 'ctfmon', 'runtimebroker',
   'securityhealthservice', 'securityhealthsystray', 'sgrmbroker',
   'wmiprvse', 'conhost', 'dllhost', 'consent', 'msiexec', 'usoclient', 'sdclt',
-  'explorer', 'taskmgr', 'electron', 'true script', 'truescript'
+  'explorer', 'taskmgr', 'electron', 'true script', 'truescript',
+  'nvdisplay.container', 'rtss', 'hoyoplay', 'starrail', 'easyanticheat'
 ])
 
 export function isProtected(processName: string): boolean {
@@ -148,7 +149,7 @@ export function registerPowerShellHandlers(ipcMain: IpcMain): void {
   // ── Get all running processes (filtered) ──────────────────────────────────
   ipcMain.handle('ps:getProcesses', async () => {
     const script = `
-$pt = @{}; @('system','idle','smss','csrss','wininit','winlogon','lsass','lsaiso','services','svchost','registry','msmpeng','audiodg','dwm','fontdrvhost','ntoskrnl','spoolsv','searchindexer','trustedinstaller','wuauclt','taskhost','taskhostw','sihost','ctfmon','runtimebroker','securityhealthservice','securityhealthsystray','sgrmbroker','wmiprvse','conhost','dllhost','consent','msiexec','usoclient','sdclt') | ForEach-Object { $pt[$_] = $true }
+$pt = @{}; @('system','idle','smss','csrss','wininit','winlogon','lsass','lsaiso','services','svchost','registry','msmpeng','audiodg','dwm','fontdrvhost','ntoskrnl','spoolsv','searchindexer','trustedinstaller','wuauclt','taskhost','taskhostw','sihost','ctfmon','runtimebroker','securityhealthservice','securityhealthsystray','sgrmbroker','wmiprvse','conhost','dllhost','consent','msiexec','usoclient','sdclt','explorer','taskmgr','electron','true script','truescript','nvdisplay.container','rtss','hoyoplay','starrail','easyanticheat') | ForEach-Object { $pt[$_] = $true }
 
 $nc = [Environment]::ProcessorCount; if ($nc -lt 1) { $nc = 1 }
 $snap = @{}
@@ -230,7 +231,8 @@ try {
     const ioValue = ioLevel === 'Low' ? 1 : 2
 
     const script = `
-try { Add-Type -TypeDefinition @"
+if (-not ('IoHelper' -as [type])) {
+  try { Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
 public class IoHelper {
@@ -238,6 +240,7 @@ public class IoHelper {
   public static extern int NtSetInformationProcess(IntPtr hProcess, int processInfoClass, ref int processInformation, int processInformationLength);
 }
 "@ } catch {}
+}
 try {
   $proc = Get-Process -Id ${pid} -ErrorAction SilentlyContinue
   if ($null -eq $proc) { Write-Output "NOT_FOUND"; exit }
@@ -276,7 +279,7 @@ try {
       },
       // ── Normal: balanced, includes network + core parking fixes
       normal: {
-        gamePriority: 'High', bgPriority: 'Low', bgIo: true,
+        gamePriority: 'High', bgPriority: 'Low', bgIo: false,
         mmcss: false, powerPlan: false, trimWs: false,
         timerRes: true, sysProfile: true,
         netThrottle: true,  // disable network coalescing interrupt
@@ -339,22 +342,24 @@ foreach ($entry in $pidList) {
 # PHASE 2 — I/O priority + working-set trim
 # ════════════════════════════════════════════════════════════════════
 ${cfg.bgIo && psIoPids ? `
-try { Add-Type -TypeDefinition @"
+if (-not ('IoB' -as [type])) {
+  try { Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
-public class WinOpt {
+public class IoB {
   [DllImport("ntdll.dll")]  public static extern int  NtSetInformationProcess(IntPtr h, int c, ref int i, int l);
   [DllImport("kernel32.dll")] public static extern bool SetProcessWorkingSetSize(IntPtr h, IntPtr min, IntPtr max);
 }
 "@ } catch {}
+}
 try {
   $ioPids = @(${psIoPids})
   foreach ($ip in $ioPids) {
     try {
       $proc = Get-Process -Id $ip -ErrorAction SilentlyContinue
       if ($null -ne $proc) {
-        $v = 1; [WinOpt]::NtSetInformationProcess($proc.Handle, 33, [ref]$v, 4) | Out-Null
-        ${cfg.trimWs ? `[WinOpt]::SetProcessWorkingSetSize($proc.Handle, [IntPtr](-1), [IntPtr](-1)) | Out-Null` : ''}
+        $v = 1; [IoB]::NtSetInformationProcess($proc.Handle, 33, [ref]$v, 4) | Out-Null
+        ${cfg.trimWs ? `[IoB]::SetProcessWorkingSetSize($proc.Handle, [IntPtr](-1), [IntPtr](-1)) | Out-Null` : ''}
       }
     } catch {}
   }
@@ -366,12 +371,14 @@ try {
 # This is THE single biggest fix for frame time jitter / FPS variance
 # ════════════════════════════════════════════════════════════════════
 ${cfg.timerRes ? `
-try { Add-Type -TypeDefinition @"
+if (-not ('TimerRes' -as [type])) {
+  try { Add-Type -TypeDefinition @"
 using System.Runtime.InteropServices;
 public class TimerRes {
   [DllImport("winmm.dll")] public static extern uint timeBeginPeriod(uint uPeriod);
 }
 "@ } catch {}
+}
 try {
   [TimerRes]::timeBeginPeriod(1) | Out-Null
 } catch {}` : ''}
@@ -416,12 +423,14 @@ try {
 # GameDVR: background capture causes GPU frame queue hitches
 # ════════════════════════════════════════════════════════════════════
 ${cfg.threadBoost ? `
-try { Add-Type -TypeDefinition @"
+if (-not ('ThreadBoost' -as [type])) {
+  try { Add-Type -TypeDefinition @"
 using System.Runtime.InteropServices;
 public class ThreadBoost {
   [DllImport("kernel32.dll")] public static extern bool SetProcessPriorityBoost(System.IntPtr h, bool disable);
 }
 "@ } catch {}
+}
 try {
   $gProc = Get-Process -Id ${gamePid} -ErrorAction SilentlyContinue
   if ($null -ne $gProc) {
@@ -445,7 +454,8 @@ try {
 # PHASE 7 — MMCSS game thread registration (maximum only)
 # ════════════════════════════════════════════════════════════════════
 ${cfg.mmcss ? `
-try { Add-Type -TypeDefinition @"
+if (-not ('MmcssHelper' -as [type])) {
+  try { Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
 public class MmcssHelper {
@@ -455,6 +465,7 @@ public class MmcssHelper {
   public static extern bool AvSetMmThreadPriority(IntPtr handle, int priority);
 }
 "@ } catch {}
+}
 try {
   $idx = [uint32]0
   $handle = [MmcssHelper]::AvSetMmThreadCharacteristics("Games", [ref]$idx)
@@ -583,10 +594,12 @@ foreach ($entry in $entries) {
 
 ${psIoPids ? `
 # Restore IO to Normal in one compile
-try { Add-Type -TypeDefinition @"
+if (-not ('IoR' -as [type])) {
+  try { Add-Type -TypeDefinition @"
 using System; using System.Runtime.InteropServices;
 public class IoR { [DllImport("ntdll.dll")] public static extern int NtSetInformationProcess(IntPtr h, int c, ref int i, int l); }
 "@ } catch {}
+}
 try {
   $ioPids = @(${psIoPids})
   foreach ($ip in $ioPids) {
@@ -598,10 +611,12 @@ try {
 } catch {}` : ''}
 
 # ── Restore system settings to Windows defaults ───────────────────────────────
-try { Add-Type -TypeDefinition @"
+if (-not ('TimerResR' -as [type])) {
+  try { Add-Type -TypeDefinition @"
 using System.Runtime.InteropServices;
 public class TimerResR { [DllImport("winmm.dll")] public static extern uint timeEndPeriod(uint uPeriod); }
 "@ } catch {}
+}
 try {
   # Restore timer resolution: allow OS to revert to its default (~15.6ms)
   [TimerResR]::timeEndPeriod(1) | Out-Null
