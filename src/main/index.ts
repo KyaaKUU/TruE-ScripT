@@ -2,7 +2,7 @@ import { app, shell, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'ele
 import { join } from 'path'
 import { execFile } from 'child_process'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { registerPowerShellHandlers, executeRestoreSnapshot, destroyPsProcess } from './powershell'
+import { registerPowerShellHandlers, executeRestoreSnapshot, destroyPsProcess, runPowerShell } from './powershell'
 
 // ─── Fix: Chromium cache "Access is denied" when running as Administrator ─────
 // When requireAdministrator is set, Chromium tries to move its cache from
@@ -168,15 +168,11 @@ function startWatcher(gamePid: number, snapshot: SnapshotEntry[]): void {
       // causing false auto-restores. tasklist /FI is the correct Windows approach.
       let gameRunning = false
       try {
-        const isAlive = await new Promise<boolean>((resolve) =>
-          execFile('tasklist', ['/FI', `PID eq ${watcherGamePid}`, '/NH', '/FO', 'CSV'],
-            { timeout: 3000 },
-            (err, stdout) => resolve(!err && stdout.includes(`"${watcherGamePid}"`))
-          )
-        )
-        gameRunning = isAlive
+        const checkScript = `if (Get-Process -Id ${watcherGamePid} -ErrorAction SilentlyContinue) { Write-Output "ALIVE" } else { Write-Output "DEAD" }`
+        const isAlive = await runPowerShell(checkScript, 3000)
+        gameRunning = isAlive.includes('ALIVE')
       } catch {
-        // If tasklist itself fails, assume running to avoid false restore
+        // If PS check fails, assume running to avoid false restore
         gameRunning = true
       }
 
@@ -232,11 +228,11 @@ async function performShutdown(): Promise<void> {
 
   destroyPsProcess()
 
-  // Give renderer a brief moment to display the shutdown state
-  setTimeout(() => {
-    mainWindow?.removeAllListeners('close')
-    app.quit()
-  }, 800)
+  // Brief delay to allow the renderer to paint the "Complete" state
+  await new Promise(resolve => setTimeout(resolve, 300))
+
+  mainWindow?.removeAllListeners('close')
+  app.quit()
 }
 
 // ─── App Bootstrap ────────────────────────────────────────────────────────────

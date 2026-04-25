@@ -148,22 +148,36 @@ export function registerPowerShellHandlers(ipcMain: IpcMain): void {
 
   // ── Get all running processes (filtered) ──────────────────────────────────
   ipcMain.handle('ps:getProcesses', async () => {
+    const ptString = Array.from(PROTECTED_PROCESSES).map(p => `'${p}'`).join(',')
     const script = `
-$pt = @{}; @('system','idle','smss','csrss','wininit','winlogon','lsass','lsaiso','services','svchost','registry','msmpeng','audiodg','dwm','fontdrvhost','ntoskrnl','spoolsv','searchindexer','trustedinstaller','wuauclt','taskhost','taskhostw','sihost','ctfmon','runtimebroker','securityhealthservice','securityhealthsystray','sgrmbroker','wmiprvse','conhost','dllhost','consent','msiexec','usoclient','sdclt','explorer','taskmgr','electron','true script','truescript','nvdisplay.container','rtss','hoyoplay','starrail','easyanticheat') | ForEach-Object { $pt[$_] = $true }
+$pt = @{}; @(${ptString}) | ForEach-Object { $pt[$_] = $true }
 
 $nc = [Environment]::ProcessorCount; if ($nc -lt 1) { $nc = 1 }
-$snap = @{}
-Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
-  try { $snap[$_.Id] = $_.TotalProcessorTime.TotalMilliseconds } catch {}
-}
+$now = [DateTime]::UtcNow
+if (-not $global:lastSnap) { $global:lastSnap = @{} }
+if (-not $global:lastTime) { $global:lastTime = $now.AddMilliseconds(-4000) }
 
-Start-Sleep -Milliseconds 300
+$elapsedMs = ($now - $global:lastTime).TotalMilliseconds
+if ($elapsedMs -le 0) { $elapsedMs = 1 }
+$global:lastTime = $now
 
-Get-Process -ErrorAction SilentlyContinue | Where-Object {
-  $_.Id -ne 0 -and -not $pt[$_.ProcessName.ToLower()]
-} | ForEach-Object {
+$currentSnap = @{}
+Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne 0 -and -not $pt[$_.ProcessName.ToLower()] } | ForEach-Object {
   try {
-    $pid2 = $_.Id; $pri = 'Normal'
+    $pid2 = $_.Id
+    $name = $_.ProcessName
+    
+    $cpuTime = $_.TotalProcessorTime.TotalMilliseconds
+    $currentSnap[$pid2] = $cpuTime
+    
+    $cpu = 0
+    if ($global:lastSnap.ContainsKey($pid2)) {
+      $d = $cpuTime - $global:lastSnap[$pid2]
+      $cpu = [math]::Round(($d / $elapsedMs) * 100 / $nc, 1)
+      if ($cpu -lt 0) { $cpu = 0 } elseif ($cpu -gt 100) { $cpu = 100 }
+    }
+    
+    $pri = 'Normal'
     try { 
       $rawPri = $_.PriorityClass.ToString() 
       if ($rawPri -eq 'Idle' -or $rawPri -eq 'BelowNormal') { $pri = 'Low' }
@@ -171,16 +185,13 @@ Get-Process -ErrorAction SilentlyContinue | Where-Object {
       elseif ($rawPri -eq 'RealTime') { $pri = 'VeryHigh' }
       else { $pri = $rawPri }
     } catch {}
-    $cpu = 0
+    
     $ram = [math]::Round($_.WorkingSet64 / 1MB, 1)
-    if ($snap.ContainsKey($pid2)) {
-      $d = $_.TotalProcessorTime.TotalMilliseconds - $snap[$pid2]
-      $cpu = [math]::Round($d / 0.3 / $nc, 1)
-      if ($cpu -lt 0) { $cpu = 0 } elseif ($cpu -gt 100) { $cpu = 100 }
-    }
-    [PSCustomObject]@{ pid = $pid2; name = $_.ProcessName; priority = $pri; cpu = $cpu; ram = $ram }
+    [PSCustomObject]@{ pid = $pid2; name = $name; priority = $pri; cpu = $cpu; ram = $ram }
   } catch {}
 } | Where-Object { $_ } | ConvertTo-Json -Compress -Depth 1
+
+$global:lastSnap = $currentSnap
 `
     try {
       const output = await runPowerShell(script, 12000)

@@ -2,7 +2,7 @@ import React from 'react'
 import { TitleBar } from './components/TitleBar'
 import { ProcessScanner } from './components/ProcessScanner'
 import { PresetSelector } from './components/PresetSelector'
-import { OptimizeControls } from './components/OptimizeControls'
+import { OptimizeControls, PROTECTED } from './components/OptimizeControls'
 import { StatusFeed } from './components/StatusFeed'
 import { useAppStore } from './store/useAppStore'
 
@@ -114,7 +114,7 @@ const StatusBar: React.FC = React.memo(() => (
     backdropFilter: 'blur(12px)',
     flexShrink: 0, position: 'relative', zIndex: 10
   }}>
-    <StatusChip color="var(--green)"  icon={<ShieldIcon />}   label="15 system processes protected" />
+    <StatusChip color="var(--green)"  icon={<ShieldIcon />}   label={`${PROTECTED.size} system processes protected`} />
     <StatusChip color="var(--orange)" icon={<AlertIcon />}    label="Realtime priority blocked" />
     <StatusChip color="var(--accent)" icon={<TerminalIcon />} label="Running as Administrator" />
   </div>

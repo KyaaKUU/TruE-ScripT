@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect } from 'react'
 import { useAppStore, SnapshotEntry, KNOWN_GAMES } from '../store/useAppStore'
 
-const PROTECTED = new Set([
+export const PROTECTED = new Set([
   'system','idle','smss','csrss','wininit','winlogon','lsass','lsaiso',
   'services','svchost','registry','msmpeng','audiodg','dwm','fontdrvhost',
   'ntoskrnl','spoolsv','searchindexer','trustedinstaller','wuauclt',
