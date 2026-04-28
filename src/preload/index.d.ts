@@ -19,7 +19,6 @@ interface SnapshotEntry {
   pid: number
   name: string
   priority: string
-  ioNormal: boolean
 }
 
 interface WatcherStatus {
@@ -33,8 +32,8 @@ interface AppAPI {
   getProcesses: () => Promise<ProcessInfo[]>
 
   // ── Priority control ────────────────────────────────────────────────────────
-  setPriority: (pid: number, priority: string, processName: string) => Promise<{ success: boolean; skipped: boolean; reason?: string }>
-  setIoPriority: (pid: number, ioLevel: 'Normal' | 'Low') => Promise<{ success: boolean; reason?: string }>
+
+
 
   // ── Batch operations ────────────────────────────────────────────────────────
   batchOptimize: (

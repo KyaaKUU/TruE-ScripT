@@ -11,7 +11,7 @@ const PRESETS: Array<{
   detail: string              // expanded sentence shown in active banner
   game: string                // game priority label
   bg: string                  // background priority label
-  io: string                  // I/O label
+  mmcss: string               // mmcss label
   features: string[]          // chips of what's active
   missing: string[]           // chips of what's NOT included (greyed)
   accentColor: string
@@ -29,9 +29,9 @@ const PRESETS: Array<{
     detail: 'Raises game CPU priority to Above Normal and sets a 0.5 ms system timer for smoother frame pacing. Safest choice for any PC.',
     game: 'Above Normal',
     bg: 'Normal',
-    io: 'Unchanged',
+    mmcss: 'Disabled',
     features: ['0.5 ms Timer'],
-    missing: ['Games Profile', 'Power Plan'],
+    missing: ['MMCSS Games Profile', 'Strict MMCSS CPU Limit'],
     accentColor: 'var(--green)',
     accentDim: 'var(--green-dim)',
     accentBorder: 'var(--green-border)',
@@ -44,12 +44,12 @@ const PRESETS: Array<{
     tag: 'RECOMMENDED',
     tagColor: 'var(--accent)',
     subtitle: 'Stable FPS, balanced system',
-    detail: 'Raises game priority to High and applies Windows Games profile. Gives the game consistent CPU headroom without aggressive side-effects.',
+    detail: 'Raises game priority to High and applies Windows MMCSS Games profile. Gives the game consistent CPU headroom.',
     game: 'High',
     bg: 'Normal',
-    io: 'Unchanged',
-    features: ['0.5 ms Timer', 'Games Profile'],
-    missing: ['Power Plan'],
+    mmcss: 'Games (20% BG CPU)',
+    features: ['0.5 ms Timer', 'MMCSS Games Profile'],
+    missing: ['Strict MMCSS CPU Limit'],
     accentColor: 'var(--accent)',
     accentDim: 'var(--accent-subtle)',
     accentBorder: 'var(--accent-border)',
@@ -62,11 +62,11 @@ const PRESETS: Array<{
     tag: 'MAX FPS',
     tagColor: 'var(--orange)',
     subtitle: 'Full stack, lowest latency',
-    detail: 'Everything in Normal plus High Performance power plan, and gently lowers background app priority to Below Normal. Best safe performance.',
+    detail: 'Everything in Normal plus strict MMCSS CPU Limit (10% for background) and gently lowers background app priority to Below Normal.',
     game: 'High',
     bg: 'Below Normal',
-    io: 'Unchanged',
-    features: ['0.5 ms Timer', 'Games Profile', 'Power Plan'],
+    mmcss: 'Games (10% BG CPU)',
+    features: ['0.5 ms Timer', 'MMCSS Games Profile', 'Strict MMCSS CPU Limit'],
     missing: [],
     accentColor: 'var(--orange)',
     accentDim: 'var(--orange-dim)',
@@ -78,9 +78,9 @@ const PRESETS: Array<{
 
 // ─── Feature chip colours ──────────────────────────────────────────────────────
 const CHIP_COLORS: Record<string, { bg: string; color: string; border: string }> = {
-  '0.5 ms Timer':  { bg: 'rgba(0,229,160,0.1)',    color: 'var(--green)',   border: 'rgba(0,229,160,0.25)' },
-  'Games Profile': { bg: 'rgba(0,229,160,0.1)',    color: 'var(--green)',   border: 'rgba(0,229,160,0.25)' },
-  'Power Plan':    { bg: 'rgba(255,140,66,0.12)',  color: 'var(--orange)',  border: 'rgba(255,140,66,0.3)' },
+  '0.5 ms Timer':           { bg: 'rgba(0,229,160,0.1)',    color: 'var(--green)',   border: 'rgba(0,229,160,0.25)' },
+  'MMCSS Games Profile':    { bg: 'rgba(0,229,160,0.1)',    color: 'var(--green)',   border: 'rgba(0,229,160,0.25)' },
+  'Strict MMCSS CPU Limit': { bg: 'rgba(255,140,66,0.12)',  color: 'var(--orange)',  border: 'rgba(255,140,66,0.3)' },
 }
 
 export const PresetSelector: React.FC = React.memo(() => {
@@ -184,7 +184,7 @@ export const PresetSelector: React.FC = React.memo(() => {
                   highlightColor={p.accentColor}
                 />
                 <SpecRow label="BG priority" value={p.bg} />
-                <SpecRow label="I/O & RAM" value={p.io} />
+                <SpecRow label="MMCSS Profile" value={p.mmcss} />
               </div>
             </button>
           )

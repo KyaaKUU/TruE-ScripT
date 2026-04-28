@@ -4,6 +4,7 @@ import { ProcessScanner } from './components/ProcessScanner'
 import { PresetSelector } from './components/PresetSelector'
 import { OptimizeControls, PROTECTED } from './components/OptimizeControls'
 import { StatusFeed } from './components/StatusFeed'
+import { Documentation } from './components/Documentation'
 import { useAppStore } from './store/useAppStore'
 
 // ─── Static decorative layer — rendered ONCE, never re-renders ───────────────
@@ -44,6 +45,7 @@ function App(): React.JSX.Element {
   // Granular selectors — App only re-renders when isOptimized or isScanning changes
   const isOptimized = useAppStore(s => s.isOptimized)
   const isScanning  = useAppStore(s => s.isScanning)
+  const isDocOpen   = useAppStore(s => s.isDocOpen)
 
   return (
     <div
@@ -64,38 +66,44 @@ function App(): React.JSX.Element {
         <TitleBar isOptimized={isOptimized} isScanning={isScanning} />
       </div>
 
-      {/* Main 2-column layout */}
-      <div
-        id="main-layout"
-        style={{
-          flex: 1,
-          display: 'grid',
-          gridTemplateColumns: '1fr 400px',
-          gap: 10,
-          padding: '10px 12px',
-          overflow: 'hidden',
-          position: 'relative',
-          zIndex: 1,
-          minHeight: 0
-        }}
-      >
-        {/* LEFT — Process Scanner */}
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
-          <ProcessScanner />
+      {/* Main 2-column layout OR Documentation */}
+      {isDocOpen ? (
+        <div style={{ flex: 1, overflowY: 'auto', zIndex: 1, position: 'relative' }}>
+          <Documentation />
         </div>
+      ) : (
+        <div
+          id="main-layout"
+          style={{
+            flex: 1,
+            display: 'grid',
+            gridTemplateColumns: '1fr 400px',
+            gap: 10,
+            padding: '10px 12px',
+            overflow: 'hidden',
+            position: 'relative',
+            zIndex: 1,
+            minHeight: 0
+          }}
+        >
+          {/* LEFT — Process Scanner */}
+          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+            <ProcessScanner />
+          </div>
 
-        {/* RIGHT — Stacked controls */}
-        <div style={{
-          display: 'flex', flexDirection: 'column',
-          gap: 10, minHeight: 0, overflowY: 'auto', paddingRight: 4
-        }}>
-          <PresetSelector />
-          <OptimizeControls />
-          <div style={{ flex: 1, minHeight: 250, display: 'flex', flexDirection: 'column' }}>
-            <StatusFeed />
+          {/* RIGHT — Stacked controls */}
+          <div style={{
+            display: 'flex', flexDirection: 'column',
+            gap: 10, minHeight: 0, overflowY: 'auto', paddingRight: 4
+          }}>
+            <PresetSelector />
+            <OptimizeControls />
+            <div style={{ flex: 1, minHeight: 250, display: 'flex', flexDirection: 'column' }}>
+              <StatusFeed />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Bottom status bar — static, wrapped in memo */}
       <StatusBar />
@@ -104,21 +112,44 @@ function App(): React.JSX.Element {
 }
 
 /* ── Bottom status bar ───────────────────────────────────────────────────── */
-const StatusBar: React.FC = React.memo(() => (
-  <div style={{
-    height: 26,
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '0 14px',
-    borderTop: '1px solid var(--border)',
-    background: 'rgba(4,6,13,0.9)',
-    backdropFilter: 'blur(12px)',
-    flexShrink: 0, position: 'relative', zIndex: 10
-  }}>
-    <StatusChip color="var(--green)"  icon={<ShieldIcon />}   label={`${PROTECTED.size} system processes protected`} />
-    <StatusChip color="var(--orange)" icon={<AlertIcon />}    label="Realtime priority blocked for safety" />
-    <StatusChip color="var(--accent)" icon={<TerminalIcon />} label="Running as Administrator" />
-  </div>
-))
+const StatusBar: React.FC = React.memo(() => {
+  const isDocOpen = useAppStore(s => s.isDocOpen)
+  const setIsDocOpen = useAppStore(s => s.setIsDocOpen)
+
+  return (
+    <div style={{
+      height: 26,
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '0 14px',
+      borderTop: '1px solid var(--border)',
+      background: 'rgba(4,6,13,0.9)',
+      backdropFilter: 'blur(12px)',
+      flexShrink: 0, position: 'relative', zIndex: 10
+    }}>
+      <div style={{ display: 'flex', gap: 14 }}>
+        <StatusChip color="var(--green)"  icon={<ShieldIcon />}   label={`${PROTECTED.size} system protected`} />
+        <StatusChip color="var(--accent)" icon={<TerminalIcon />} label="Admin Rights Active" />
+      </div>
+
+      <button
+        onClick={() => setIsDocOpen(!isDocOpen)}
+        style={{
+          background: 'none', border: 'none',
+          color: isDocOpen ? 'var(--orange)' : 'var(--text-muted)',
+          fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)',
+          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+          textTransform: 'uppercase', letterSpacing: '0.05em', transition: 'color 0.2s'
+        }}
+      >
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+        {isDocOpen ? 'Close Docs' : 'Documentation'}
+      </button>
+    </div>
+  )
+})
 StatusBar.displayName = 'StatusBar'
 
 const StatusChip: React.FC<{ icon: React.ReactNode; label: string; color: string }> = ({ icon, label, color }) => (

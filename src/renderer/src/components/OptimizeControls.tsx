@@ -101,7 +101,7 @@ export const OptimizeControls: React.FC = () => {
 
     const snap: SnapshotEntry[] = processes
       .filter(p => !isProtected(p.name))
-      .map(p => ({ pid: p.pid, name: p.name, priority: p.priority || 'Normal', ioNormal: true }))
+      .map(p => ({ pid: p.pid, name: p.name, priority: p.priority || 'Normal' }))
     saveSnapshot(snap)
 
     const bgProcs = processes

@@ -15,6 +15,7 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^4.0.0",
+    "mermaid": "^11.4.0",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
@@ -45,7 +46,7 @@
     "win": {
       "target": "nsis",
       "requestedExecutionLevel": "requireAdministrator",
-      "icon": "resources/icon.ico"
+      "icon": "LOGO.png"
     },
     "nsis": {
       "oneClick": false,
@@ -53,7 +54,8 @@
     },
     "files": [
       "out/**/*",
-      "resources/**/*"
+      "resources/**/*",
+      "LOGO.png"
     ]
   }
 }

@@ -7,12 +7,9 @@ const api = {
   getProcesses: () => ipcRenderer.invoke('ps:getProcesses'),
 
   // ── Single process priority ─────────────────────────────────────────────────
-  setPriority: (pid: number, priority: string, processName: string) =>
-    ipcRenderer.invoke('ps:setPriority', pid, priority, processName),
 
-  // ── I/O priority ───────────────────────────────────────────────────────────
-  setIoPriority: (pid: number, ioLevel: 'Normal' | 'Low') =>
-    ipcRenderer.invoke('ps:setIoPriority', pid, ioLevel),
+
+
 
   // ── Batch optimize (preset) ─────────────────────────────────────────────────
   batchOptimize: (
@@ -24,16 +21,16 @@ const api = {
 
   // ── Restore from snapshot (UI-triggered via IPC handler) ───────────────────
   restoreSnapshot: (
-    snapshot: Array<{ pid: number; name: string; priority: string; ioNormal: boolean }>
+    snapshot: Array<{ pid: number; name: string; priority: string }>
   ) => ipcRenderer.invoke('ps:restoreSnapshot', snapshot),
 
   // ── Background watcher control ──────────────────────────────────────────────
-  startWatcher: (gamePid: number, snapshot: Array<{ pid: number; name: string; priority: string; ioNormal: boolean }>) =>
+  startWatcher: (gamePid: number, snapshot: Array<{ pid: number; name: string; priority: string }>) =>
     ipcRenderer.send('watcher:start', gamePid, snapshot),
 
   stopWatcher: () => ipcRenderer.send('watcher:stop'),
 
-  manualRestore: (snapshot: Array<{ pid: number; name: string; priority: string; ioNormal: boolean }>) =>
+  manualRestore: (snapshot: Array<{ pid: number; name: string; priority: string }>) =>
     ipcRenderer.invoke('watcher:manualRestore', snapshot),
 
   getWatcherStatus: () => ipcRenderer.invoke('watcher:getStatus'),

@@ -20,7 +20,6 @@ interface SnapshotEntry {
   pid: number
   name: string
   priority: string
-  ioNormal: boolean
 }
 
 // ─── Background watcher state ────────────────────────────────────────────────
@@ -47,7 +46,7 @@ function createWindow(): BrowserWindow {
     backgroundColor: '#090e17',
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',
-    icon: join(__dirname, '../../resources/icon.png'),
+    icon: join(__dirname, '../../LOGO.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -92,7 +91,7 @@ function createTray(): void {
   // Use the app icon, falling back to an empty image if not found
   let icon: Electron.NativeImage
   try {
-    icon = nativeImage.createFromPath(join(__dirname, '../../resources/icon.png'))
+    icon = nativeImage.createFromPath(join(__dirname, '../../LOGO.png'))
     if (icon.isEmpty()) {
       icon = nativeImage.createEmpty()
     }

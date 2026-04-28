@@ -204,70 +204,9 @@ $global:lastSnap = $currentSnap
   })
 
 
-  // ── Set priority for a single process ─────────────────────────────────────
-  ipcMain.handle('ps:setPriority', async (_event, pid: number, priority: string, processName: string) => {
-    if (isProtected(processName)) {
-      return { success: false, skipped: true, reason: 'Protected system process' }
-    }
 
-    let safePriority = priority
-    if (priority === 'Low') safePriority = 'BelowNormal' // Idle is too dangerous, causes priority inversion
-    if (priority === 'VeryHigh') safePriority = 'High' // RealTime starves GPU drivers, High is optimal
 
-    const script = `
-try {
-  $proc = Get-Process -Id ${pid} -ErrorAction SilentlyContinue
-  if ($null -eq $proc) { Write-Output "NOT_FOUND"; exit }
-  $proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::${safePriority}
-  Write-Output "SUCCESS"
-} catch { Write-Output "ERROR:$($_.Exception.Message)" }
-`
-    try {
-      const result = await runPowerShell(script)
-      if (result.startsWith('SUCCESS')) {
-        return { success: true, skipped: false }
-      } else if (result === 'NOT_FOUND') {
-        return { success: false, skipped: true, reason: 'Process not found' }
-      } else {
-        return { success: false, skipped: false, reason: result }
-      }
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e)
-      return { success: false, skipped: false, reason: msg }
-    }
-  })
 
-  // ── Set I/O priority for a process ────────────────────────────────────────
-  ipcMain.handle('ps:setIoPriority', async (_event, pid: number, ioLevel: 'Normal' | 'Low') => {
-    const ioValue = ioLevel === 'Low' ? 1 : 2
-
-    const script = `
-if (-not ('IoHelper' -as [type])) {
-  try { Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-public class IoHelper {
-  [DllImport("ntdll.dll")]
-  public static extern int NtSetInformationProcess(IntPtr hProcess, int processInfoClass, ref int processInformation, int processInformationLength);
-}
-"@ } catch {}
-}
-try {
-  $proc = Get-Process -Id ${pid} -ErrorAction SilentlyContinue
-  if ($null -eq $proc) { Write-Output "NOT_FOUND"; exit }
-  $val = ${ioValue}
-  $result = [IoHelper]::NtSetInformationProcess($proc.Handle, 33, [ref]$val, 4)
-  if ($result -eq 0) { Write-Output "SUCCESS" } else { Write-Output "NTFAIL:$result" }
-} catch { Write-Output "ERROR:$($_.Exception.Message)" }
-`
-    try {
-      const result = await runPowerShell(script)
-      return { success: result.startsWith('SUCCESS'), reason: result }
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e)
-      return { success: false, reason: msg }
-    }
-  })
 
   // ── Batch optimize: single PowerShell call for ALL processes ───────────────
   ipcMain.handle('ps:batchOptimize', async (
@@ -280,24 +219,21 @@ try {
     interface OptResult { pid: number; name: string; success: boolean; skipped: boolean; reason?: string }
 
     const config = {
-      // ── Minimum: safest changes only, low side-effects
       minimum: {
         gamePriority: 'AboveNormal', bgPriority: 'Normal',
-        powerPlan: false, timerRes: true, sysProfile: false
+        timerRes: true, sysProfile: false, sysResp: 20
       },
-      // ── Normal: safe stability, high game priority
       normal: {
         gamePriority: 'High', bgPriority: 'Normal',
-        powerPlan: false, timerRes: true, sysProfile: true
+        timerRes: true, sysProfile: true, sysResp: 20
       },
-      // ── Maximum: lower background, power plan
       maximum: {
         gamePriority: 'High', bgPriority: 'BelowNormal',
-        powerPlan: true, timerRes: true, sysProfile: true
+        timerRes: true, sysProfile: true, sysResp: 10
       }
     }
     const cfg = config[preset]
-    const sysResp = 20
+    const sysResp = cfg.sysResp
 
     const safeBackgrounds = backgroundPids.filter(p => !isProtected(p.name))
     const skippedProtected = backgroundPids.filter(p => isProtected(p.name))
@@ -310,8 +246,6 @@ try {
     ]
 
     const psJsonArray = JSON.stringify(pidList)
-    const ioPids = cfg.bgIo ? safeBackgrounds.map(p => p.pid) : []
-    const psIoPids = ioPids.length > 0 ? ioPids.join(',') : ''
 
     const script = `
 $pidList = '${psJsonArray}' | ConvertFrom-Json
@@ -339,33 +273,7 @@ foreach ($entry in $pidList) {
 }
 
 # ════════════════════════════════════════════════════════════════════
-# PHASE 2 — I/O priority + working-set trim
-# ════════════════════════════════════════════════════════════════════
-${cfg.bgIo && psIoPids ? `
-if (-not ('IoB' -as [type])) {
-  try { Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-public class IoB {
-  [DllImport("ntdll.dll")]  public static extern int  NtSetInformationProcess(IntPtr h, int c, ref int i, int l);
-  [DllImport("kernel32.dll")] public static extern bool SetProcessWorkingSetSize(IntPtr h, IntPtr min, IntPtr max);
-}
-"@ } catch {}
-}
-try {
-  $ioPids = @(${psIoPids})
-  foreach ($ip in $ioPids) {
-    try {
-      $proc = Get-Process -Id $ip -ErrorAction SilentlyContinue
-      if ($null -ne $proc) {
-        $v = 1; [IoB]::NtSetInformationProcess($proc.Handle, 33, [ref]$v, 4) | Out-Null
-      }
-    } catch {}
-  }
-} catch {}` : ''}
-
-# ════════════════════════════════════════════════════════════════════
-# PHASE 3 — Windows Timer Resolution  [FPS STABILITY - CRITICAL]
+# PHASE 2 — Windows Timer Resolution  [FPS STABILITY - CRITICAL]
 # NtSetTimerResolution(5000) changes the OS scheduler tick to 0.5ms
 # This is THE single biggest fix for frame time jitter / FPS variance
 # ════════════════════════════════════════════════════════════════════
@@ -384,9 +292,8 @@ try {
 } catch {}` : ''}
 
 # ════════════════════════════════════════════════════════════════════
-# PHASE 4 — System Profile (Multimedia/Games registry)
+# PHASE 3 — System Profile (Multimedia/Games MMCSS profile)
 # SystemResponsiveness: controls % CPU given to background tasks
-# NetworkThrottlingIndex FFFFFFFF = disable interrupt coalescing
 # ════════════════════════════════════════════════════════════════════
 ${cfg.sysProfile ? `
 try {
@@ -397,25 +304,6 @@ try {
     Set-ItemProperty -Path $taskPath -Name 'SystemResponsiveness' -Value ${sysResp} -Type DWord -ErrorAction SilentlyContinue
     Set-ItemProperty -Path $taskPath -Name 'Priority'             -Value 6        -Type DWord -ErrorAction SilentlyContinue
     Set-ItemProperty -Path $taskPath -Name 'Scheduling Category'  -Value 'High'   -Type String -ErrorAction SilentlyContinue
-    Set-ItemProperty -Path $taskPath -Name 'SFIO Priority'        -Value 'High'   -Type String -ErrorAction SilentlyContinue
-    Set-ItemProperty -Path $taskPath -Name 'GPU Priority'         -Value 8        -Type DWord -ErrorAction SilentlyContinue
-  }
-} catch {}` : ''}
-
-# ════════════════════════════════════════════════════════════════════
-# (Phase 5 removed for stability: GameDVR suppression)
-# ════════════════════════════════════════════════════════════════════
-
-# ════════════════════════════════════════════════════════════════════
-# PHASE 5 — Power plan (maximum only)
-# ════════════════════════════════════════════════════════════════════
-${cfg.powerPlan ? `
-try {
-  $ulti = powercfg -list 2>$null | Select-String 'e9a42b02-d5df-448d-aa00-03f14749eb61'
-  if ($ulti) {
-    powercfg -setactive e9a42b02-d5df-448d-aa00-03f14749eb61 2>$null
-  } else {
-    powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null
   }
 } catch {}` : ''}
 
@@ -470,7 +358,7 @@ $results | ConvertTo-Json -Compress -Depth 2
   // ── Restore snapshot: single PowerShell call for ALL processes ─────────────
   ipcMain.handle('ps:restoreSnapshot', async (
     _event,
-    snapshot: Array<{ pid: number; name: string; priority: string; ioNormal: boolean }>
+    snapshot: Array<{ pid: number; name: string; priority: string }>
   ) => {
     return executeRestoreSnapshot(snapshot)
   })
@@ -478,7 +366,7 @@ $results | ConvertTo-Json -Compress -Depth 2
 
 // ─── Exported restore function (used by both IPC handler + background watcher) ─
 export async function executeRestoreSnapshot(
-  snapshot: Array<{ pid: number; name: string; priority: string; ioNormal: boolean }>
+  snapshot: Array<{ pid: number; name: string; priority: string }>
 ): Promise<Array<{ pid: number; name: string; success: boolean; skipped: boolean; reason?: string }>> {
   interface RestoreResult { pid: number; name: string; success: boolean; skipped: boolean; reason?: string }
 
@@ -494,8 +382,7 @@ export async function executeRestoreSnapshot(
   const mapPri = (p: string) => p === 'Low' ? 'BelowNormal' : p === 'VeryHigh' ? 'High' : (p || 'Normal')
   const normalized = safe.map(e => ({
     pid: e.pid,
-    priority: mapPri(e.priority),
-    ioNormal: e.ioNormal
+    priority: mapPri(e.priority)
   }))
 
   const psJsonArray = JSON.stringify(normalized)
@@ -541,9 +428,6 @@ try {
   # Restore NetworkThrottlingIndex to default (10)
   Set-ItemProperty -Path $regPath -Name 'NetworkThrottlingIndex' -Value 10 -Type DWord -ErrorAction SilentlyContinue
 } catch {}
-try {
-  # Restore power plan to Balanced: 381b4222-f694-41f0-9685-ff5bb260df2e
-  powercfg -setactive 381b4222-f694-41f0-9685-ff5bb260df2e 2>$null
 } catch {}
 
 $results | ConvertTo-Json -Compress -Depth 2
