@@ -23,7 +23,7 @@ interface SnapshotEntry {
 }
 
 // ─── Background watcher state ────────────────────────────────────────────────
-let watcherInterval: ReturnType<typeof setInterval> | null = null
+let watcherInterval: ReturnType<typeof setTimeout> | null = null
 let watcherGamePid: number | null = null
 let watcherSnapshot: SnapshotEntry[] = []
 let isShuttingDown = false
@@ -158,26 +158,20 @@ function startWatcher(gamePid: number, snapshot: SnapshotEntry[]): void {
   watcherGamePid = gamePid
   watcherSnapshot = snapshot
 
-  watcherInterval = setInterval(async () => {
-    if (isShuttingDown) return
+  const tick = async () => {
+    if (isShuttingDown || !watcherInterval) return
     try {
-      // Check if game PID is still alive.
-      // NOTE: process.kill(pid,0) is POSIX-only — on Windows it always throws
-      // EPERM for elevated/cross-session processes (e.g. games running as admin),
-      // causing false auto-restores. tasklist /FI is the correct Windows approach.
       let gameRunning = false
       try {
         const checkScript = `if (Get-Process -Id ${watcherGamePid} -ErrorAction SilentlyContinue) { Write-Output "ALIVE" } else { Write-Output "DEAD" }`
         const isAlive = await runPowerShell(checkScript, 3000)
         gameRunning = isAlive.includes('ALIVE')
       } catch {
-        // If PS check fails, assume running to avoid false restore
         gameRunning = true
       }
 
       if (!gameRunning) {
         stopWatcher()
-        // Notify renderer that auto-restore is firing
         mainWindow?.webContents.send('watcher:autoRestoring', {
           pid: watcherGamePid,
           snapshotLength: watcherSnapshot.length
@@ -185,7 +179,6 @@ function startWatcher(gamePid: number, snapshot: SnapshotEntry[]): void {
 
         await executeRestoreSnapshot(watcherSnapshot)
 
-        // Notify renderer that restore is complete
         mainWindow?.webContents.send('watcher:restored', {
           pid: watcherGamePid,
           snapshotLength: watcherSnapshot.length
@@ -193,18 +186,24 @@ function startWatcher(gamePid: number, snapshot: SnapshotEntry[]): void {
         watcherSnapshot = []
         watcherGamePid = null
         refreshTrayMenu?.()
+        return // exit loop
       }
-    } catch { /* swallow — watcher must never crash */ }
-  }, 5000)
+    } catch { /* ignore */ }
 
-  // Notify renderer watcher is now active
+    // Schedule next tick only if still active
+    if (watcherInterval && !isShuttingDown) {
+      watcherInterval = setTimeout(tick, 5000)
+    }
+  }
+
+  watcherInterval = setTimeout(tick, 5000)
   mainWindow?.webContents.send('watcher:started', { pid: gamePid })
   refreshTrayMenu?.()
 }
 
 function stopWatcher(): void {
   if (watcherInterval) {
-    clearInterval(watcherInterval)
+    clearTimeout(watcherInterval)
     watcherInterval = null
   }
 }

@@ -5,6 +5,7 @@ import { useAppStore, KNOWN_GAMES, ProcessInfo } from '../store/useAppStore'
 const priorityBadge = (p: string): { bg: string; color: string; border: string } => {
   switch (p) {
     case 'High': return { bg: 'rgba(255,140,66,0.12)', color: 'var(--orange)', border: 'rgba(255,140,66,0.3)' }
+    case 'AboveNormal': return { bg: 'rgba(124,106,255,0.1)', color: 'var(--accent)', border: 'rgba(124,106,255,0.25)' }
     case 'VeryHigh': return { bg: 'rgba(255,209,102,0.1)', color: 'var(--yellow)', border: 'rgba(255,209,102,0.3)' }
     case 'Normal': return { bg: 'rgba(148,163,184,0.07)', color: 'var(--text-secondary)', border: 'var(--border-bright)' }
     case 'Low': return { bg: 'rgba(107,114,128,0.08)', color: '#6b7280', border: 'rgba(107,114,128,0.25)' }

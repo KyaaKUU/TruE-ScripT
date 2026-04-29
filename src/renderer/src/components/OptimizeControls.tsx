@@ -8,8 +8,8 @@ export const PROTECTED = new Set([
   'taskhost','taskhostw','sihost','ctfmon','runtimebroker',
   'securityhealthservice','securityhealthsystray','sgrmbroker',
   'wmiprvse','conhost','dllhost','consent','msiexec','usoclient','sdclt',
-  'explorer','taskmgr','electron','true script','truescript',
-  'nvdisplay.container','rtss','hoyoplay','starrail','easyanticheat'
+  'explorer','taskmgr','electron','true script','truescript','true-script',
+  'nvdisplay.container','rtss','searchhost','startmenuexperiencehost','shellexperiencehost'
 ])
 const isProtected = (name: string) => PROTECTED.has(name.toLowerCase().replace('.exe', ''))
 
@@ -485,7 +485,7 @@ const GameTargetCard: React.FC<{
       borderColor: isOptimized ? 'var(--green-border)' : 'rgba(255,140,66,0.35)',
       transition: 'all 0.3s'
     }}>
-      {isOptimized ? (preset === 'maximum' ? 'VERY HIGH' : 'HIGH') : 'NORM'}
+      {isOptimized ? (preset === 'minimum' ? 'ABOVE NORM' : 'HIGH') : 'NORM'}
     </div>
   </div>
 )

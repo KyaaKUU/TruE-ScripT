@@ -135,6 +135,15 @@ export const KNOWN_GAMES: Record<string, string> = {
   'diablo iv': 'Diablo IV',
   'diablo4': 'Diablo IV',
   'd4': 'Diablo IV',
+  'starrail': 'Honkai: Star Rail',
+  'genshinimpact': 'Genshin Impact',
+  'yuanshen': 'Genshin Impact',
+  'zenlesszonezero': 'Zenless Zone Zero',
+  'zzz': 'Zenless Zone Zero',
+  'honkaiimpact3': 'Honkai Impact 3rd',
+  'houkai3rd': 'Honkai Impact 3rd',
+  'bh3': 'Honkai Impact 3rd',
+  'hoyoplay': 'HoyoPlay',
 }
 
 // ─── Zustand Store ────────────────────────────────────────────────────────────

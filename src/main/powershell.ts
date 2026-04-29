@@ -15,9 +15,10 @@ const PROTECTED_PROCESSES = new Set([
   'taskhost', 'taskhostw', 'sihost', 'ctfmon', 'runtimebroker',
   'securityhealthservice', 'securityhealthsystray', 'sgrmbroker',
   'wmiprvse', 'conhost', 'dllhost', 'consent', 'msiexec', 'usoclient', 'sdclt',
-  'explorer', 'taskmgr', 'electron', 'true script', 'truescript',
-  'nvdisplay.container', 'rtss', 'hoyoplay', 'starrail', 'easyanticheat'
+  'explorer', 'taskmgr', 'electron', 'true script', 'truescript', 'true-script',
+  'nvdisplay.container', 'rtss', 'searchhost', 'startmenuexperiencehost', 'shellexperiencehost'
 ])
+const PROTECTED_PT_STRING = Array.from(PROTECTED_PROCESSES).map(p => `'${p}'`).join(',')
 
 export function isProtected(processName: string): boolean {
   const name = processName.toLowerCase().replace('.exe', '')
@@ -148,9 +149,8 @@ export function registerPowerShellHandlers(ipcMain: IpcMain): void {
 
   // ── Get all running processes (filtered) ──────────────────────────────────
   ipcMain.handle('ps:getProcesses', async () => {
-    const ptString = Array.from(PROTECTED_PROCESSES).map(p => `'${p}'`).join(',')
     const script = `
-$pt = @{}; @(${ptString}) | ForEach-Object { $pt[$_] = $true }
+$pt = @{}; @(${PROTECTED_PT_STRING}) | ForEach-Object { $pt[$_] = $true }
 
 $nc = [Environment]::ProcessorCount; if ($nc -lt 1) { $nc = 1 }
 $now = [DateTime]::UtcNow
@@ -181,7 +181,6 @@ Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne 0 -and -not
     try { 
       $rawPri = $_.PriorityClass.ToString() 
       if ($rawPri -eq 'Idle' -or $rawPri -eq 'BelowNormal') { $pri = 'Low' }
-      elseif ($rawPri -eq 'AboveNormal') { $pri = 'High' }
       elseif ($rawPri -eq 'RealTime') { $pri = 'VeryHigh' }
       else { $pri = $rawPri }
     } catch {}
@@ -427,7 +426,6 @@ try {
   Set-ItemProperty -Path $regPath -Name 'SystemResponsiveness' -Value 20 -Type DWord -ErrorAction SilentlyContinue
   # Restore NetworkThrottlingIndex to default (10)
   Set-ItemProperty -Path $regPath -Name 'NetworkThrottlingIndex' -Value 10 -Type DWord -ErrorAction SilentlyContinue
-} catch {}
 } catch {}
 
 $results | ConvertTo-Json -Compress -Depth 2
