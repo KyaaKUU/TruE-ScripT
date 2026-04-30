@@ -15,8 +15,16 @@ if not exist node_modules (
     call Fix-Dependencies.bat
 )
 
-echo [LAUNCH] Starting in development mode...
+echo [1] Launch Normally (Terminal remains open)
+echo [2] Launch in Background (No terminal window)
 echo.
-npm run dev
+set /p choice="Select mode (1/2): "
 
+if "%choice%"=="2" (
+    echo [LAUNCH] Starting in background...
+    start wscript.exe Launch-TruEScripT.vbs
+    exit
+)
+
+npm run dev
 pause

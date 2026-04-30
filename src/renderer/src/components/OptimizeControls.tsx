@@ -9,7 +9,12 @@ export const PROTECTED = new Set([
   'securityhealthservice','securityhealthsystray','sgrmbroker',
   'wmiprvse','conhost','dllhost','consent','msiexec','usoclient','sdclt',
   'explorer','taskmgr','electron','true script','truescript','true-script',
-  'nvdisplay.container','rtss','searchhost','startmenuexperiencehost','shellexperiencehost'
+  'nvdisplay.container','rtss','searchhost','startmenuexperiencehost','shellexperiencehost',
+  'searchprotocolhost', 'searchfilterhost', 'memory compression', 'secure system',
+  'vmmem', 'vmmemwsl', 'apphost', 'backgroundtaskhost', 'compattelrunner',
+  'smartscreen', 'sppsvc', 'wsappx', 'clipsvc', 'licensemanager', 'textinputhost',
+  'applicationframehost', 'universal search', 'systemsettings', 'shellexperiencehost',
+  'windowsinternal.composableshell.experiences.textinput.inputapp'
 ])
 const isProtected = (name: string) => PROTECTED.has(name.toLowerCase().replace('.exe', ''))
 
@@ -137,16 +142,32 @@ export const OptimizeControls: React.FC = () => {
       // Phase 4: Per-process results
       for (const r of results) {
         const isGame = r.pid === selectedGamePid
+        let finalStatus: 'success' | 'failed' | 'skipped' = 'failed'
+        let msg = ''
+
+        if (r.skipped) {
+          finalStatus = 'skipped'
+          msg = `[SKIP] ${r.reason || 'protected — untouched'}`
+        } else if (r.success) {
+          finalStatus = 'success'
+          msg = isGame
+            ? `[SET] priority → ${preset === 'minimum' ? 'Above Normal' : 'High'} (game boosted)`
+            : `[SET] priority → ${preset === 'minimum' ? 'Normal' : 'Below Normal'}${preset === 'maximum' ? ' · io → Low' : ''}`
+        } else if (r.reason === 'ACCESS_DENIED') {
+          finalStatus = 'skipped'
+          msg = '[LOCKED] system process — skipped (access denied)'
+        } else if (r.reason?.startsWith('SKIPPED:')) {
+          finalStatus = 'skipped'
+          msg = `[SKIP] ${r.reason.split(':')[1]} process — untouched`
+        } else {
+          finalStatus = 'failed'
+          msg = `[FAIL] ${r.reason ?? 'unknown error'}`
+        }
+
         addStatusEntry({
           pid: r.pid, name: r.name,
-          status: r.skipped ? 'skipped' : r.success ? 'success' : 'failed',
-          message: r.skipped
-            ? `[SKIP] ${r.reason || 'protected — untouched'}`
-            : r.success
-              ? isGame
-                ? `[SET] priority → ${preset === 'minimum' ? 'Above Normal' : 'High'} (game boosted)`
-                : `[SET] priority → ${preset === 'minimum' ? 'Normal' : 'Below Normal'}${preset === 'maximum' ? ' · io → Low' : ''}`
-              : `[FAIL] ${r.reason ?? 'unknown error'}`
+          status: finalStatus,
+          message: msg
         })
       }
 
@@ -200,14 +221,30 @@ export const OptimizeControls: React.FC = () => {
       const elapsed = Math.round(performance.now() - t0)
 
       for (const r of results) {
+        let finalStatus: 'success' | 'failed' | 'skipped' = 'failed'
+        let msg = ''
+
+        if (r.skipped) {
+          finalStatus = 'skipped'
+          msg = `[SKIP] ${r.reason || 'process already exited'}`
+        } else if (r.success) {
+          finalStatus = 'success'
+          msg = `[RST] priority restored to original`
+        } else if (r.reason === 'ACCESS_DENIED') {
+          finalStatus = 'skipped'
+          msg = '[LOCKED] system process — skipped (access denied)'
+        } else if (r.reason?.startsWith('SKIPPED:')) {
+          finalStatus = 'skipped'
+          msg = `[SKIP] ${r.reason.split(':')[1]} process — untouched`
+        } else {
+          finalStatus = 'failed'
+          msg = `[FAIL] ${r.reason ?? 'unknown error'}`
+        }
+
         addStatusEntry({
           pid: r.pid, name: r.name,
-          status: r.skipped ? 'skipped' : r.success ? 'success' : 'failed',
-          message: r.skipped
-            ? `[SKIP] ${r.reason || 'process already exited'}`
-            : r.success
-              ? `[RST] priority restored to original`
-              : `[FAIL] ${r.reason ?? 'unknown error'}`
+          status: finalStatus,
+          message: msg
         })
       }
 

@@ -16,11 +16,17 @@ const PROTECTED_PROCESSES = new Set([
   'securityhealthservice', 'securityhealthsystray', 'sgrmbroker',
   'wmiprvse', 'conhost', 'dllhost', 'consent', 'msiexec', 'usoclient', 'sdclt',
   'explorer', 'taskmgr', 'electron', 'true script', 'truescript', 'true-script',
-  'nvdisplay.container', 'rtss', 'searchhost', 'startmenuexperiencehost', 'shellexperiencehost'
+  'nvdisplay.container', 'rtss', 'searchhost', 'startmenuexperiencehost', 'shellexperiencehost',
+  'searchprotocolhost', 'searchfilterhost', 'memory compression', 'secure system',
+  'vmmem', 'vmmemwsl', 'apphost', 'backgroundtaskhost', 'compattelrunner',
+  'smartscreen', 'sppsvc', 'wsappx', 'clipsvc', 'licensemanager', 'textinputhost',
+  'applicationframehost', 'universal search', 'systemsettings', 'shellexperiencehost',
+  'windowsinternal.composableshell.experiences.textinput.inputapp'
 ])
 const PROTECTED_PT_STRING = Array.from(PROTECTED_PROCESSES).map(p => `'${p}'`).join(',')
 
-export function isProtected(processName: string): boolean {
+export function isProtected(processName: string, pid?: number): boolean {
+  if (pid !== undefined && pid < 1000) return true
   const name = processName.toLowerCase().replace('.exe', '')
   return PROTECTED_PROCESSES.has(name)
 }
@@ -234,8 +240,8 @@ $global:lastSnap = $currentSnap
     const cfg = config[preset]
     const sysResp = cfg.sysResp
 
-    const safeBackgrounds = backgroundPids.filter(p => !isProtected(p.name))
-    const skippedProtected = backgroundPids.filter(p => isProtected(p.name))
+    const safeBackgrounds = backgroundPids.filter(p => !isProtected(p.name, p.pid))
+    const skippedProtected = backgroundPids.filter(p => isProtected(p.name, p.pid))
 
     type PidEntry = { pid: number; priority: string }
     const mapPri = (p: string) => p === 'Low' ? 'BelowNormal' : p === 'VeryHigh' ? 'High' : p
@@ -258,15 +264,23 @@ foreach ($entry in $pidList) {
   $pri    = $entry.priority
   $status = "PENDING"
   try {
-    $proc = Get-Process -Id $pid2 -ErrorAction SilentlyContinue
-    if ($null -eq $proc) {
-      $status = "NOT_FOUND"
+    if ($pid2 -lt 1000) {
+      $status = "SKIPPED:SYSTEM"
     } else {
-      $proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::$pri
-      $status = "SUCCESS"
+      $proc = Get-Process -Id $pid2 -ErrorAction SilentlyContinue
+      if ($null -eq $proc) {
+        $status = "NOT_FOUND"
+      } else {
+        $proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::$pri
+        $status = "SUCCESS"
+      }
     }
   } catch {
-    $status = "ERROR:$($_.Exception.Message)"
+    if ($_.Exception.Message -like "*Access is denied*") {
+      $status = "ACCESS_DENIED"
+    } else {
+      $status = "ERROR:$($_.Exception.Message)"
+    }
   }
   $results += [PSCustomObject]@{ pid = $pid2; status = $status }
 }
@@ -369,8 +383,8 @@ export async function executeRestoreSnapshot(
 ): Promise<Array<{ pid: number; name: string; success: boolean; skipped: boolean; reason?: string }>> {
   interface RestoreResult { pid: number; name: string; success: boolean; skipped: boolean; reason?: string }
 
-  const safe = snapshot.filter(e => !isProtected(e.name))
-  const skipped = snapshot.filter(e => isProtected(e.name))
+  const safe = snapshot.filter(e => !isProtected(e.name, e.pid))
+  const skipped = snapshot.filter(e => isProtected(e.name, e.pid))
 
   if (safe.length === 0) {
     return [
@@ -395,15 +409,23 @@ foreach ($entry in $entries) {
   $pri    = $entry.priority
   $status = "PENDING"
   try {
-    $proc = Get-Process -Id $pid2 -ErrorAction SilentlyContinue
-    if ($null -eq $proc) {
-      $status = "NOT_FOUND"
+    if ($pid2 -lt 1000) {
+      $status = "SKIPPED:SYSTEM"
     } else {
-      $proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::$pri
-      $status = "SUCCESS"
+      $proc = Get-Process -Id $pid2 -ErrorAction SilentlyContinue
+      if ($null -eq $proc) {
+        $status = "NOT_FOUND"
+      } else {
+        $proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::$pri
+        $status = "SUCCESS"
+      }
     }
   } catch {
-    $status = "ERROR:$($_.Exception.Message)"
+    if ($_.Exception.Message -like "*Access is denied*") {
+      $status = "ACCESS_DENIED"
+    } else {
+      $status = "ERROR:$($_.Exception.Message)"
+    }
   }
   $results += [PSCustomObject]@{ pid = $pid2; status = $status }
 }
