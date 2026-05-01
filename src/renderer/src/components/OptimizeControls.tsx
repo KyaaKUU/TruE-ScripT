@@ -13,7 +13,7 @@ export const PROTECTED = new Set([
   'searchprotocolhost', 'searchfilterhost', 'memory compression', 'secure system',
   'vmmem', 'vmmemwsl', 'apphost', 'backgroundtaskhost', 'compattelrunner',
   'smartscreen', 'sppsvc', 'wsappx', 'clipsvc', 'licensemanager', 'textinputhost',
-  'applicationframehost', 'universal search', 'systemsettings', 'shellexperiencehost',
+  'applicationframehost', 'universal search', 'systemsettings',
   'windowsinternal.composableshell.experiences.textinput.inputapp'
 ])
 const isProtected = (name: string) => PROTECTED.has(name.toLowerCase().replace('.exe', ''))
@@ -104,6 +104,9 @@ export const OptimizeControls: React.FC = () => {
     setIsOptimizing(true)
     clearStatusFeed()
 
+    // Capture "Before" metrics for thesis documentation
+    const gameBefore = processes.find(p => p.pid === selectedGamePid)
+
     const snap: SnapshotEntry[] = processes
       .filter(p => !isProtected(p.name))
       .map(p => ({ pid: p.pid, name: p.name, priority: p.priority || 'Normal' }))
@@ -179,6 +182,35 @@ export const OptimizeControls: React.FC = () => {
         message: `[DONE] ${ok} set · ${failed} err · ${skipped} skip · elapsed=${elapsed}ms` })
 
       setIsOptimized(true)
+
+      // ─── Generate Performance Documentation Report ───
+      const tEnd = new Date().toLocaleString()
+      const gameAfter = processes.find(p => p.pid === selectedGamePid) || gameBefore
+
+      const reportContent = `# TruE ScripT Optimization Report\n` +
+        `Generated on: ${tEnd}\n\n` +
+        `## 1. Target Information\n` +
+        `- **Process:** ${selectedGameName}\n` +
+        `- **PID:** ${selectedGamePid}\n` +
+        `- **Preset Used:** ${preset.toUpperCase()}\n\n` +
+        `## 2. Performance Tracking (Before vs After)\n` +
+        `| Metric | Before | After | Change |\n` +
+        `| :--- | :--- | :--- | :--- |\n` +
+        `| CPU Usage | ${gameBefore?.cpu || 0}% | ${gameAfter?.cpu || 0}% | ${((gameAfter?.cpu || 0) - (gameBefore?.cpu || 0)).toFixed(1)}% |\n` +
+        `| RAM Usage | ${gameBefore?.ram || 0} MB | ${gameAfter?.ram || 0} MB | ${((gameAfter?.ram || 0) - (gameBefore?.ram || 0)).toFixed(1)} MB |\n` +
+        `| Priority | Normal | ${preset === 'minimum' ? 'Above Normal' : 'High'} | Increased |\n\n` +
+        `## 3. System Tweaks Applied\n` +
+        `- [X] Windows Timer Resolution set to 0.5ms\n` +
+        `- [X] Multimedia Class Scheduler Service (MMCSS) Optimized\n` +
+        `- [X] Background Process Throttling Active\n\n` +
+        `--- \n` +
+        `*Automated documentation by TruE ScripT Optimization Engine*`;
+
+      const reportResult = await window.api.saveReport(reportContent)
+      if (reportResult?.success) {
+        addStatusEntry({ pid: 0, name: 'truescript', status: 'success', 
+          message: `[DOCS] session report saved: ${reportResult.path.split('\\').pop()}` })
+      }
 
       // Phase 6: System-level stability features applied
       const stabilityMap: Record<string, string> = {

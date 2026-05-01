@@ -20,7 +20,7 @@ const PROTECTED_PROCESSES = new Set([
   'searchprotocolhost', 'searchfilterhost', 'memory compression', 'secure system',
   'vmmem', 'vmmemwsl', 'apphost', 'backgroundtaskhost', 'compattelrunner',
   'smartscreen', 'sppsvc', 'wsappx', 'clipsvc', 'licensemanager', 'textinputhost',
-  'applicationframehost', 'universal search', 'systemsettings', 'shellexperiencehost',
+  'applicationframehost', 'universal search', 'systemsettings',
   'windowsinternal.composableshell.experiences.textinput.inputapp'
 ])
 const PROTECTED_PT_STRING = Array.from(PROTECTED_PROCESSES).map(p => `'${p}'`).join(',')
@@ -374,6 +374,18 @@ $results | ConvertTo-Json -Compress -Depth 2
     snapshot: Array<{ pid: number; name: string; priority: string }>
   ) => {
     return executeRestoreSnapshot(snapshot)
+  })
+
+  // ── Save session report to file ───────────────────────────────────────────
+  ipcMain.handle('ps:saveReport', async (_event, content: string) => {
+    try {
+      const fileName = `Session-Report-${new Date().getTime()}.md`
+      const filePath = join(process.cwd(), fileName)
+      writeFileSync(filePath, content, 'utf8')
+      return { success: true, path: filePath }
+    } catch (err) {
+      return { success: false, error: String(err) }
+    }
   })
 }
 
