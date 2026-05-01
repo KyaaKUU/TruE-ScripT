@@ -208,11 +208,6 @@ $global:lastSnap = $currentSnap
     }
   })
 
-
-
-
-
-
   // ── Batch optimize: single PowerShell call for ALL processes ───────────────
   ipcMain.handle('ps:batchOptimize', async (
     _event,
@@ -250,7 +245,7 @@ $global:lastSnap = $currentSnap
       ...safeBackgrounds.map(p => ({ pid: p.pid, priority: mapPri(cfg.bgPriority) }))
     ]
 
-    const psJsonArray = JSON.stringify(pidList)
+    const psJsonArray = JSON.stringify(pidList).replace(/'/g, "''")
 
     const script = `
 $pidList = '${psJsonArray}' | ConvertFrom-Json
@@ -410,7 +405,7 @@ export async function executeRestoreSnapshot(
     priority: mapPri(e.priority)
   }))
 
-  const psJsonArray = JSON.stringify(normalized)
+  const psJsonArray = JSON.stringify(normalized).replace(/'/g, "''")
 
   const script = `
 $entries = '${psJsonArray}' | ConvertFrom-Json

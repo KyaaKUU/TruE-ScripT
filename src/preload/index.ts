@@ -6,11 +6,6 @@ const api = {
   // ── Process scanning ────────────────────────────────────────────────────────
   getProcesses: () => ipcRenderer.invoke('ps:getProcesses'),
 
-  // ── Single process priority ─────────────────────────────────────────────────
-
-
-
-
   // ── Batch optimize (preset) ─────────────────────────────────────────────────
   batchOptimize: (
     gamePid: number,

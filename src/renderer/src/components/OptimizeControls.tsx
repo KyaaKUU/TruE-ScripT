@@ -16,7 +16,10 @@ export const PROTECTED = new Set([
   'applicationframehost', 'universal search', 'systemsettings',
   'windowsinternal.composableshell.experiences.textinput.inputapp'
 ])
-const isProtected = (name: string) => PROTECTED.has(name.toLowerCase().replace('.exe', ''))
+const isProtected = (name: string, pid?: number) => {
+  if (pid !== undefined && pid < 1000) return true
+  return PROTECTED.has(name.toLowerCase().replace('.exe', ''))
+}
 
 export const OptimizeControls: React.FC = () => {
   const {
@@ -56,6 +59,10 @@ export const OptimizeControls: React.FC = () => {
       addStatusEntry({
         pid: 0, name: 'monitor', status: 'success',
         message: `[WATCH] auto-restore complete — ${data.snapshotLength} entries restored`
+      })
+      addStatusEntry({
+        pid: 0, name: 'system', status: 'success',
+        message: `[RST] 0.5ms timer released → 15.6ms · SystemResponsiveness → 20 (default)`
       })
       clearSnapshot()
       setIsOptimized(false)
@@ -108,12 +115,12 @@ export const OptimizeControls: React.FC = () => {
     const gameBefore = processes.find(p => p.pid === selectedGamePid)
 
     const snap: SnapshotEntry[] = processes
-      .filter(p => !isProtected(p.name))
+      .filter(p => !isProtected(p.name, p.pid))
       .map(p => ({ pid: p.pid, name: p.name, priority: p.priority || 'Normal' }))
     saveSnapshot(snap)
 
     const bgProcs = processes
-      .filter(p => p.pid !== selectedGamePid && !isProtected(p.name))
+      .filter(p => p.pid !== selectedGamePid && !isProtected(p.name, p.pid))
       .map(p => ({ pid: p.pid, name: p.name }))
 
     const totalTargets = bgProcs.length + 1
@@ -245,7 +252,7 @@ export const OptimizeControls: React.FC = () => {
     addStatusEntry({ pid: 0, name: 'truescript', status: 'pending',
       message: `[RESTORE] reverting ${snapshot.length} processes to original state` })
     addStatusEntry({ pid: 0, name: 'powershell', status: 'pending',
-      message: `[EXEC] restore batch → ${snapshot.filter(e => !isProtected(e.name)).length} processes` })
+      message: `[EXEC] restore batch → ${snapshot.filter(e => !isProtected(e.name, e.pid)).length} processes` })
 
     try {
       // Delegate to backend (also stops watcher via watcher:manualRestore)
@@ -286,7 +293,7 @@ export const OptimizeControls: React.FC = () => {
       addStatusEntry({ pid: 0, name: 'truescript', status: 'success',
         message: `[DONE] ${ok} restored · ${failed} err · ${skipped} skip · elapsed=${elapsed}ms` })
       addStatusEntry({ pid: 0, name: 'system', status: 'success',
-        message: `[RST] 1ms timer released · system profile reset · net throttle restored · power plan → Balanced` })
+        message: `[RST] 0.5ms timer released → 15.6ms · SystemResponsiveness → 20 · net throttle restored` })
     } catch (err) {
       const elapsed = Math.round(performance.now() - t0)
       addStatusEntry({ pid: 0, name: 'truescript', status: 'failed',

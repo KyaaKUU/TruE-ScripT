@@ -11,7 +11,7 @@ Sistem Operasi Windows: Program ini membutuhkan OS Windows untuk bisa mengekseku
 Buka terminal (seperti Command Prompt, PowerShell, atau terminal bawaan di Visual Studio Code), arahkan ke dalam folder proyek Anda, dan jalankan perintah berikut sesuai kebutuhan:
 
 Langkah 1: Instalasi Dependensi (Wajib saat pertama kali)
-Untuk mengunduh seluruh pustaka yang terdaftar (seperti zustand, tailwindcss, electron, dll), jalankan perintah ini:
+Untuk mengunduh seluruh pustaka yang terdaftar (seperti zustand, mermaid, electron, dll), jalankan perintah ini:
 
 Bash
 npm install

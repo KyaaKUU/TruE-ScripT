@@ -27,6 +27,7 @@ let watcherInterval: ReturnType<typeof setTimeout> | null = null
 let watcherGamePid: number | null = null
 let watcherSnapshot: SnapshotEntry[] = []
 let isShuttingDown = false
+let isRestoringFromWatcher = false
 
 // ─── App state ────────────────────────────────────────────────────────────────
 let mainWindow: BrowserWindow | null = null
@@ -159,7 +160,7 @@ function startWatcher(gamePid: number, snapshot: SnapshotEntry[]): void {
   watcherSnapshot = snapshot
 
   const tick = async () => {
-    if (isShuttingDown || !watcherInterval) return
+    if (isShuttingDown || !watcherInterval || isRestoringFromWatcher) return
     try {
       let gameRunning = false
       try {
@@ -171,6 +172,7 @@ function startWatcher(gamePid: number, snapshot: SnapshotEntry[]): void {
       }
 
       if (!gameRunning) {
+        isRestoringFromWatcher = true
         stopWatcher()
         mainWindow?.webContents.send('watcher:autoRestoring', {
           pid: watcherGamePid,
@@ -185,10 +187,13 @@ function startWatcher(gamePid: number, snapshot: SnapshotEntry[]): void {
         })
         watcherSnapshot = []
         watcherGamePid = null
+        isRestoringFromWatcher = false
         refreshTrayMenu?.()
         return // exit loop
       }
-    } catch { /* ignore */ }
+    } catch {
+      isRestoringFromWatcher = false
+    }
 
     // Schedule next tick only if still active
     if (watcherInterval && !isShuttingDown) {

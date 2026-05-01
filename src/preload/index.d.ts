@@ -5,6 +5,7 @@ interface ProcessInfo {
   name: string
   priority: string
   cpu: number
+  ram: number
 }
 
 interface OptimizeResult {
@@ -31,10 +32,6 @@ interface AppAPI {
   // ── Process scanning ────────────────────────────────────────────────────────
   getProcesses: () => Promise<ProcessInfo[]>
 
-  // ── Priority control ────────────────────────────────────────────────────────
-
-
-
   // ── Batch operations ────────────────────────────────────────────────────────
   batchOptimize: (
     gamePid: number,
@@ -52,6 +49,9 @@ interface AppAPI {
 
   // ── Shutdown ────────────────────────────────────────────────────────────────
   shutdownApp: () => void
+
+  // ── Session reports ─────────────────────────────────────────────────────────
+  saveReport: (content: string) => Promise<{ success: boolean; path?: string; error?: string }>
 
   // ── Backend event subscriptions (return unsubscribe fn) ────────────────────
   onWatcherStarted: (cb: (data: { pid: number }) => void) => () => void

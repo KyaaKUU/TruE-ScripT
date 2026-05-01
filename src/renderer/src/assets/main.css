@@ -1,4 +1,3 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* ─── Design Tokens ─────────────────────────────────────────────────────── */
@@ -293,6 +292,7 @@ body::after {
 
 /* ─── Mono text ──────────────────────────────────────────────────────────── */
 .mono { font-family: var(--font-mono); }
+.flex-1 { flex: 1 1 0%; }
 
 /* ─── Divider ────────────────────────────────────────────────────────────── */
 .divider {

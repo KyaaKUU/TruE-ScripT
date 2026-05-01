@@ -1,6 +1,5 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 
 export default defineConfig({
@@ -24,7 +23,7 @@ export default defineConfig({
         '@': resolve('src/renderer/src')
       }
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [react()],
     build: {
       // Tree-shake, minify, and split vendor chunks for faster initial parse
       minify: 'esbuild',
