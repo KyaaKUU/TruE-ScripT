@@ -9,17 +9,55 @@ const execFileAsync = promisify(execFile)
 
 // ─── Protected system processes that MUST NEVER be touched ───────────────────
 const PROTECTED_PROCESSES = new Set([
-  'system', 'idle', 'smss', 'csrss', 'wininit', 'winlogon', 'lsass', 'lsaiso',
-  'services', 'svchost', 'registry', 'msmpeng', 'audiodg', 'dwm', 'fontdrvhost',
-  'ntoskrnl', 'spoolsv', 'searchindexer', 'trustedinstaller', 'wuauclt',
-  'taskhost', 'taskhostw', 'sihost', 'ctfmon', 'runtimebroker',
-  'securityhealthservice', 'securityhealthsystray', 'sgrmbroker',
-  'wmiprvse', 'conhost', 'dllhost', 'consent', 'msiexec', 'usoclient', 'sdclt',
-  'explorer', 'taskmgr', 'electron', 'true script', 'truescript', 'true-script',
-  'nvdisplay.container', 'rtss', 'searchhost', 'startmenuexperiencehost', 'shellexperiencehost',
-  'searchprotocolhost', 'searchfilterhost', 'memory compression', 'secure system',
+  // ── Kernel & Boot ──────────────────────────────────────────────────────────
+  'system', 'idle', 'smss', 'csrss', 'wininit', 'ntoskrnl', 'registry',
+  // ── Authentication ─────────────────────────────────────────────────────────
+  'winlogon', 'lsass', 'lsaiso', 'consent',
+  // ── Services ───────────────────────────────────────────────────────────────
+  'services', 'svchost', 'spoolsv', 'trustedinstaller', 'wuauclt',
+  // ── Security ───────────────────────────────────────────────────────────────
+  'msmpeng', 'securityhealthservice', 'securityhealthsystray', 'sgrmbroker', 'smartscreen',
+  // ── Desktop Shell ──────────────────────────────────────────────────────────
+  'explorer', 'dwm', 'fontdrvhost', 'sihost', 'ctfmon', 'taskmgr',
+  // ── Runtime ────────────────────────────────────────────────────────────────
+  'runtimebroker', 'taskhost', 'taskhostw', 'wmiprvse', 'conhost', 'dllhost',
+  // ── GPU & Display ──────────────────────────────────────────────────────────
+  'nvdisplay.container', 'nvcontainer', 'nvidia share', 'nvidia web helper',
+  'amdrsserv', 'amddvr', 'radeonsoft', 'atiesrxx',
+  // ── Audio (mencegah audio crackling akibat thread starvation) ──────────────
+  'audiodg', 'audiodevicecmdlets',
+  // ── Peripheral Drivers (mencegah priority inversion pada input device) ─────
+  'lghub', 'lghub_agent', 'lghub_updater', 'logioptionsplus', 'logitechg',
+  'razer synapse', 'rzsynapse', 'razercentral', 'rzdeviceengine',
+  'icue', 'corsair.service', 'cue',
+  'steelseriesengine', 'steelseriesgg', 'steelseriesggsvc',
+  'asusoptimization', 'armorycrate', 'aboringservice',
+  'ghub', 'senhd',
+  // ── Game Launchers & Overlay (anti-cheat compatibility) ────────────────────
+  'steam', 'steamwebhelper', 'steamservice',
+  'epicgameslauncher', 'epicwebhelper',
+  'battle.net', 'agent',
+  'riotclient', 'riotvanguard', 'vgc', 'vgtray',
+  'easyanticheat', 'easyanticheat_eos', 'beclient', 'beclient_x64',
+  'origin', 'ea app', 'eadesktop', 'ealink',
+  'gog galaxy', 'galaxyclient',
+  'ubisoft connect', 'upc',
+  // ── VoIP & Streaming (mencegah audio/mic lag) ─────────────────────────────
+  'discord', 'update', 'krisp',
+  'obs64', 'obs32', 'streamlabs obs',
+  'teamspeak', 'ts3client_win64',
+  // ── Monitoring & Overlay ───────────────────────────────────────────────────
+  'rtss', 'msi afterburner', 'hwinfo64', 'hwinfo32', 'gpuz', 'cpuz',
+  'fraps', 'fpsmon',
+  // ── Self-Protection ────────────────────────────────────────────────────────
+  'electron', 'truescript', 'true script', 'true-script',
+  // ── Windows Shell & System ─────────────────────────────────────────────────
+  'searchhost', 'startmenuexperiencehost', 'shellexperiencehost',
+  'searchprotocolhost', 'searchfilterhost', 'searchindexer',
+  'memory compression', 'secure system',
   'vmmem', 'vmmemwsl', 'apphost', 'backgroundtaskhost', 'compattelrunner',
-  'smartscreen', 'sppsvc', 'wsappx', 'clipsvc', 'licensemanager', 'textinputhost',
+  'sppsvc', 'wsappx', 'clipsvc', 'licensemanager', 'textinputhost',
+  'msiexec', 'usoclient', 'sdclt',
   'applicationframehost', 'universal search', 'systemsettings',
   'windowsinternal.composableshell.experiences.textinput.inputapp'
 ])
@@ -252,6 +290,31 @@ $pidList = '${psJsonArray}' | ConvertFrom-Json
 $results = @()
 
 # ════════════════════════════════════════════════════════════════════
+# ACCESS PRE-CHECK — Test process handle before modifying priority
+# Uses Win32 OpenProcess to verify PROCESS_SET_INFORMATION (0x0200)
+# If we can't open the handle, skip immediately (no ACCESS_DENIED)
+# ════════════════════════════════════════════════════════════════════
+if (-not ('TruEAccessCheck' -as [type])) {
+  try { Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class TruEAccessCheck {
+  [DllImport("kernel32.dll", SetLastError = true)]
+  public static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, int dwProcessId);
+  [DllImport("kernel32.dll", SetLastError = true)]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  public static extern bool CloseHandle(IntPtr hObject);
+  public static bool CanSetPriority(int pid) {
+    IntPtr h = OpenProcess(0x0200, false, pid);
+    if (h == IntPtr.Zero) return false;
+    CloseHandle(h);
+    return true;
+  }
+}
+"@ } catch {}
+}
+
+# ════════════════════════════════════════════════════════════════════
 # PHASE 1 — Process priority (CPU scheduling)
 # ════════════════════════════════════════════════════════════════════
 foreach ($entry in $pidList) {
@@ -265,6 +328,8 @@ foreach ($entry in $pidList) {
       $proc = Get-Process -Id $pid2 -ErrorAction SilentlyContinue
       if ($null -eq $proc) {
         $status = "NOT_FOUND"
+      } elseif (-not [TruEAccessCheck]::CanSetPriority($pid2)) {
+        $status = "SKIPPED:NO_ACCESS"
       } else {
         $proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::$pri
         $status = "SUCCESS"
@@ -272,7 +337,7 @@ foreach ($entry in $pidList) {
     }
   } catch {
     if ($_.Exception.Message -like "*Access is denied*") {
-      $status = "ACCESS_DENIED"
+      $status = "SKIPPED:NO_ACCESS"
     } else {
       $status = "ERROR:$($_.Exception.Message)"
     }
@@ -334,7 +399,7 @@ $results | ConvertTo-Json -Compress -Depth 2
         pid: gamePid,
         name: gameProcessName,
         success: gameStatus === 'SUCCESS',
-        skipped: gameStatus === 'NOT_FOUND',
+        skipped: gameStatus === 'NOT_FOUND' || gameStatus.startsWith('SKIPPED:'),
         reason: gameStatus === 'SUCCESS' ? undefined : gameStatus
       })
 
@@ -344,7 +409,7 @@ $results | ConvertTo-Json -Compress -Depth 2
           pid: bg.pid,
           name: bg.name,
           success: s === 'SUCCESS',
-          skipped: s === 'NOT_FOUND',
+          skipped: s === 'NOT_FOUND' || s.startsWith('SKIPPED:'),
           reason: s === 'SUCCESS' ? undefined : s
         })
       }
@@ -411,6 +476,27 @@ export async function executeRestoreSnapshot(
 $entries = '${psJsonArray}' | ConvertFrom-Json
 $results = @()
 
+# ── Access pre-check (reuse type if already loaded) ───────────────────────────
+if (-not ('TruEAccessCheck' -as [type])) {
+  try { Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class TruEAccessCheck {
+  [DllImport("kernel32.dll", SetLastError = true)]
+  public static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, int dwProcessId);
+  [DllImport("kernel32.dll", SetLastError = true)]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  public static extern bool CloseHandle(IntPtr hObject);
+  public static bool CanSetPriority(int pid) {
+    IntPtr h = OpenProcess(0x0200, false, pid);
+    if (h == IntPtr.Zero) return false;
+    CloseHandle(h);
+    return true;
+  }
+}
+"@ } catch {}
+}
+
 foreach ($entry in $entries) {
   $pid2   = $entry.pid
   $pri    = $entry.priority
@@ -422,6 +508,8 @@ foreach ($entry in $entries) {
       $proc = Get-Process -Id $pid2 -ErrorAction SilentlyContinue
       if ($null -eq $proc) {
         $status = "NOT_FOUND"
+      } elseif (-not [TruEAccessCheck]::CanSetPriority($pid2)) {
+        $status = "SKIPPED:NO_ACCESS"
       } else {
         $proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::$pri
         $status = "SUCCESS"
@@ -429,7 +517,7 @@ foreach ($entry in $entries) {
     }
   } catch {
     if ($_.Exception.Message -like "*Access is denied*") {
-      $status = "ACCESS_DENIED"
+      $status = "SKIPPED:NO_ACCESS"
     } else {
       $status = "ERROR:$($_.Exception.Message)"
     }
@@ -477,7 +565,7 @@ $results | ConvertTo-Json -Compress -Depth 2
         pid: e.pid,
         name: nameMap.get(e.pid) ?? e.name,
         success: s === 'SUCCESS',
-        skipped: s === 'NOT_FOUND',
+        skipped: s === 'NOT_FOUND' || s.startsWith('SKIPPED:'),
         reason: s === 'SUCCESS' ? undefined : s
       })
     }

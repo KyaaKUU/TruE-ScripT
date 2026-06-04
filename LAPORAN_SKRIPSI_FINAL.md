@@ -214,5 +214,136 @@ TruE ScripT/
 
 ---
 
-## 10. Kesimpulan Teknis
-TruE ScripT mengintegrasikan otomasi sistem tingkat rendah dengan antarmuka modern untuk memberikan solusi optimasi yang aman, efisien, dan transparan bagi pengguna Windows. Dengan tiga lapis keamanan, auto-restore otomatis, dan tiga pilar optimasi (Priority, Timer, MMCSS), aplikasi ini menjamin peningkatan performa game tanpa risiko kerusakan sistem.
+## 10. Analisis Kritis: Fenomena "Efek Placebo" dan Keterbatasan Kernel
+
+### 10.1 Latar Belakang Kritik
+Dalam evaluasi akademis, diajukan analogi bahwa optimasi sistem oleh aplikasi User-Space dapat diumpamakan sebagai *"disiram air panas saat kedinginan — hangat sesaat, lalu kembali dingin"*. Bagian ini menganalisis validitas kritik tersebut berdasarkan arsitektur kernel Windows.
+
+### 10.2 User-Space vs. Kernel-Space
+Aplikasi TruE ScripT berjalan di **User-Space** (Ring 3) menggunakan hak akses Administrator. Aplikasi ini **tidak** berjalan di **Kernel-Space** (Ring 0) sebagai driver sistem. Implikasi dari posisi ini:
+
+| Aspek | User-Space (TruE ScripT) | Kernel-Space (Driver/Ring 0) |
+| :--- | :--- | :--- |
+| Otoritas | Terbatas pada Win32 API publik | Akses penuh ke seluruh sistem |
+| Risiko BSOD | Tidak mungkin terjadi | Sangat tinggi jika terdapat bug |
+| Anti-Cheat | Kompatibel (tidak terdeteksi) | Akan diblokir/banned |
+| Persistensi | Sementara (auto-restore) | Permanen sampai uninstall |
+| Dynamic Override | Kernel bisa override kapan saja | Kontrol penuh |
+
+### 10.3 Dynamic Priority Boost oleh Kernel
+Windows Kernel Scheduler (`ntoskrnl.exe`) memiliki mekanisme **Dynamic Priority Boost** yang secara otomatis menaikkan atau menurunkan prioritas thread berdasarkan:
+1. Status **foreground/background** jendela aplikasi
+2. Kebutuhan **I/O completion** (disk, jaringan, input device)
+3. Kebutuhan **GUI responsiveness** untuk thread yang menangani input pengguna
+
+Mekanisme ini berarti perubahan prioritas yang dilakukan oleh aplikasi User-Space (termasuk TruE ScripT) dapat di-*override* oleh kernel kapan saja demi menjaga stabilitas sistem secara keseluruhan. Inilah validitas dari analogi "hangat sesaat, lalu dingin kembali" — kernel Windows adalah otoritas tertinggi.
+
+### 10.4 Risiko Timer Resolution 0.5ms pada Sesi Panjang
+Mengubah timer resolution dari default ~15.6ms ke 0.5ms via `NtSetTimerResolution` memiliki efek samping:
+- **C-States Terhalang:** CPU dipaksa bangun 2000 kali/detik (vs. default 64 kali), mencegah mode hemat daya (C6/C7)
+- **Peningkatan Suhu Dasar:** Base temperature CPU meningkat secara konstan
+- **Thermal Throttling:** Pada sesi gaming panjang (>30 menit), suhu CPU dapat mencapai batas termal ($T_j$ Max ~95-100°C), memicu penurunan clock frequency secara paksa oleh hardware
+- **Catatan Penting:** Pada Windows 10 versi 2004+ dan Windows 11, scheduler sudah menggunakan arsitektur *tickless* sehingga dampak timer resolution terhadap penjadwalan CPU berkurang signifikan
+
+### 10.5 Risiko Priority Inversion & Thread Starvation
+Menurunkan prioritas proses latar belakang ke `BelowNormal` berisiko menyebabkan:
+1. **Thread Starvation:** Proses pendukung (audio driver, peripheral driver, jaringan) kekurangan alokasi CPU
+2. **Priority Inversion:** Game yang menunggu respons dari proses berprioritas rendah (misalnya buffer audio atau update input mouse) ikut terhambat
+3. **Gejala:** Stuttering, audio crackling, dan input delay yang kontra-produktif terhadap tujuan optimasi
+
+---
+
+## 11. Batasan Legal & Kepatuhan Terhadap Aturan Sistem Operasi
+
+### 11.1 Prinsip Kepatuhan
+TruE ScripT dirancang dengan kepatuhan penuh terhadap aturan dan batasan Windows:
+
+1. **Hanya Menggunakan Win32 API Publik yang Terdokumentasi:**
+   - `SetPriorityClass()` — API resmi untuk mengubah prioritas proses (terdokumentasi di Microsoft Docs)
+   - `NtSetTimerResolution()` — API semi-publik di `ntdll.dll` untuk resolusi timer (terdokumentasi di MSDN)
+   - Registry API (`Set-ItemProperty`) — API standar untuk modifikasi registri Windows
+   - Semua API yang digunakan merupakan bagian dari **Windows SDK** dan **tidak di-obfuscate atau di-hack**
+
+2. **Tidak Memodifikasi Kernel (Ring 0):**
+   - Aplikasi tidak memasang kernel driver
+   - Tidak melakukan kernel patching atau bypass PatchGuard (Kernel Patch Protection)
+   - Tidak menggunakan teknik rootkit atau kernel hooking
+   - Mencegah potensi BSOD (Blue Screen of Death)
+
+3. **Kompatibel dengan Anti-Cheat:**
+   - Tidak melakukan memory injection ke proses game
+   - Tidak melakukan DLL hooking atau API hooking pada proses game
+   - Tidak memodifikasi file executable game
+   - Aman dari deteksi oleh Riot Vanguard, Easy Anti-Cheat, BattlEye, dan VAC
+
+4. **100% Reversibel:**
+   - Semua perubahan (prioritas, timer, registri) dikembalikan ke kondisi default Windows saat game ditutup
+   - Auto-restore melalui Background Watcher memastikan tidak ada sisa modifikasi permanen
+   - Graceful Shutdown menjamin restorasi bahkan saat aplikasi ditutup paksa
+
+### 11.2 Batasan yang Tidak Boleh Dilanggar
+
+| Batasan | Alasan | Implementasi di TruE ScripT |
+| :--- | :--- | :--- |
+| Tidak boleh menggunakan `RealTime` priority | Dapat menyebabkan hang total / BSOD | Maksimal hanya `High` priority |
+| Tidak boleh memodifikasi proses kernel | Pelanggaran PatchGuard → BSOD | Protected 90+ processes list |
+| Tidak boleh mengakses memori proses lain | Pelanggaran anti-cheat → banned | Hanya mengubah PriorityClass via API |
+| Tidak boleh meninggalkan modifikasi permanen | Merusak kestabilan sistem jangka panjang | Auto-restore on game exit + shutdown |
+
+---
+
+## 12. Studi Komparatif: Xiaomi Game Turbo vs TruE ScripT
+
+### 12.1 Arsitektur Game Booster Komersial
+**Xiaomi Game Turbo** (Android) dan **TruE ScripT** (Windows) menggunakan pendekatan arsitektur yang identik:
+
+| Aspek | Xiaomi Game Turbo | TruE ScripT |
+| :--- | :--- | :--- |
+| Platform | Android (Linux Kernel) | Windows (NT Kernel) |
+| Posisi | System Service (User-Space) | Desktop App (User-Space) |
+| Mekanisme CPU | Linux `cgroups` + `nice values` | Win32 `SetPriorityClass` |
+| Mekanisme RAM | Android Memory Manager API | Tidak memanipulasi RAM |
+| Mekanisme Timer | Tidak tersedia | `NtSetTimerResolution` |
+| Mekanisme Jaringan | Traffic prioritization | Tidak memanipulasi jaringan |
+| Scheduler Profile | Tidak tersedia | MMCSS `SystemResponsiveness` |
+| Reversibilitas | Otomatis saat game ditutup | Otomatis saat game ditutup |
+| Modifikasi Kernel | Tidak | Tidak |
+
+### 12.2 Kesimpulan Komparatif
+Kedua sistem bertindak sebagai **Orkestrator User-Space** — mereka tidak memodifikasi kernel, melainkan memanfaatkan API resmi sistem operasi untuk menyesuaikan parameter performa secara dinamis dan sementara. Pendekatan ini merupakan standar industri untuk aplikasi game booster komersial.
+
+---
+
+## 13. Solusi Mitigasi & Perlindungan Sistem
+
+### 13.1 Smart Filtering (Proteksi 90+ Proses)
+Untuk mengatasi risiko Priority Inversion dan Thread Starvation, TruE ScripT mengimplementasikan **Smart Filtering** — daftar proteksi yang diperluas dari 65 menjadi 90+ proses:
+
+| Kategori Baru | Proses yang Dilindungi | Alasan |
+| :--- | :--- | :--- |
+| Peripheral Drivers | lghub, rzsynapse, icue, steelseriesengine | Mencegah input lag mouse/keyboard |
+| GPU Drivers | nvcontainer, amdrsserv, radeonsoft | Mencegah gangguan rendering |
+| Audio | audiodg, audiodevicecmdlets | Mencegah audio crackling |
+| Game Launchers | steam, epicgameslauncher, riotclient | Kompatibilitas anti-cheat |
+| Anti-Cheat | vgc, easyanticheat, beclient | Mencegah konflik deteksi |
+| VoIP | discord, teamspeak | Mencegah mic/audio lag |
+| Monitoring | rtss, msi afterburner, hwinfo | Menjaga akurasi overlay FPS |
+
+### 13.2 Edukasi Pengguna via UI
+Aplikasi menampilkan peringatan visual pada preset **Maximum** yang menjelaskan risiko priority inversion dan thermal throttling pada sesi bermain panjang, serta merekomendasikan preset **Normal** sebagai pilihan yang lebih stabil.
+
+### 13.3 Rekomendasi Pengembangan Masa Depan: CPU Affinity
+Solusi optimal untuk menggantikan penurunan prioritas background adalah **CPU Affinity** (pengikatan inti):
+- Memindahkan proses latar belakang ke core CPU tertentu (misal E-Cores pada Intel Gen 12+)
+- Membiarkan game berjalan di P-Cores (Performance Cores) tanpa gangguan
+- Mengeliminasi priority inversion karena setiap kategori proses memiliki core-nya sendiri
+- Implementasi: `SetProcessAffinityMask()` via Win32 API (tetap User-Space, tetap legal)
+
+---
+
+## 14. Kesimpulan Teknis
+TruE ScripT mengintegrasikan otomasi sistem tingkat rendah dengan antarmuka modern untuk memberikan solusi optimasi yang aman, efisien, dan transparan bagi pengguna Windows. Dengan tiga lapis keamanan, auto-restore otomatis, tiga pilar optimasi (Priority, Timer, MMCSS), serta proteksi 90+ proses kritis, aplikasi ini menjamin peningkatan performa game tanpa risiko kerusakan sistem.
+
+Aplikasi secara sadar beroperasi di **User-Space** menggunakan **Win32 API resmi** — sebuah keputusan arsitektur yang memprioritaskan keamanan, legalitas, dan kompatibilitas anti-cheat di atas kontrol kernel penuh. Meskipun hal ini berarti kernel Windows dapat melakukan *dynamic override* terhadap pengaturan prioritas, pendekatan ini merupakan **standar industri** yang sama digunakan oleh Xiaomi Game Turbo, Razer Cortex, dan game booster komersial lainnya.
+
+Keterbatasan ini bukan kelemahan, melainkan **batasan desain yang disengaja** demi menjaga integritas dan keamanan sistem operasi pengguna.

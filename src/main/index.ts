@@ -1,6 +1,5 @@
 import { app, shell, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron'
 import { join } from 'path'
-import { execFile } from 'child_process'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerPowerShellHandlers, executeRestoreSnapshot, destroyPsProcess, runPowerShell } from './powershell'
 

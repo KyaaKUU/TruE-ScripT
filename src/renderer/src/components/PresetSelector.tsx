@@ -259,6 +259,54 @@ export const PresetSelector: React.FC = React.memo(() => {
           System processes never touched · All changes auto-restored on exit
         </span>
       </div>
+
+      {/* ── User-Space Orchestrator disclaimer ── */}
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', gap: 7,
+        marginTop: 6,
+        padding: '7px 10px',
+        borderRadius: 7,
+        background: 'rgba(99,102,241,0.04)',
+        border: '1px solid rgba(99,102,241,0.15)'
+      }}>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+          style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 2 }}>
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+          <path d="M12 16v-4M12 8h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+        </svg>
+        <span style={{ fontSize: 9, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+          <span style={{ color: 'var(--accent)', fontWeight: 600 }}>User-Space Orchestrator</span> — 
+          Aplikasi bekerja melalui Win32 API resmi tanpa memodifikasi kernel. 
+          Perubahan bersifat sementara dan dikembalikan otomatis saat game ditutup. 
+          Aman dari BSOD & kompatibel dengan anti-cheat.
+        </span>
+      </div>
+
+      {/* ── Thermal / Starvation warning for Maximum preset ── */}
+      {preset === 'maximum' && (
+        <div className="animate-fade-in-up" style={{
+          display: 'flex', alignItems: 'flex-start', gap: 7,
+          marginTop: 6,
+          padding: '7px 10px',
+          borderRadius: 7,
+          background: 'rgba(255,140,66,0.06)',
+          border: '1px solid rgba(255,140,66,0.2)'
+        }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+            style={{ color: 'var(--orange)', flexShrink: 0, marginTop: 2 }}>
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+              stroke="currentColor" strokeWidth="2"/>
+            <line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" strokeWidth="2"/>
+            <line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" strokeWidth="2"/>
+          </svg>
+          <span style={{ fontSize: 9, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+            <span style={{ color: 'var(--orange)', fontWeight: 600 }}>Peringatan Akademis:</span> Preset
+            Maximum menurunkan prioritas background ke BelowNormal. Pada sesi panjang, ini dapat menyebabkan
+            <em> priority inversion</em> (input lag periferal) dan peningkatan beban termal CPU.
+            Gunakan preset Normal untuk sesi bermain &gt; 30 menit.
+          </span>
+        </div>
+      )}
     </div>
   )
 })

@@ -15,7 +15,7 @@ const Mmd: React.FC<{ chart: string }> = ({ chart }) => {
   return <div ref={ref} style={{ display: 'flex', justifyContent: 'center' }} />
 }
 
-const Box: React.FC<{ children: React.ReactNode; chart?: string }> = ({ children, chart }) => (
+const Box: React.FC<{ children?: React.ReactNode; chart?: string }> = ({ children, chart }) => (
   <div style={{ background: 'var(--bg-surface)', padding: 20, borderRadius: 10, border: '1px solid var(--border)', marginBottom: chart ? 0 : 10 }}>
     {chart ? <Mmd chart={chart} /> : children}
   </div>
@@ -418,10 +418,68 @@ export const Documentation: React.FC = () => (
       ]} />
     </section>
 
+    {/* ── 14. ANALISIS KRITIS ── */}
+    <section style={{ marginBottom: 40 }}>
+      <H2 n={14}>Analisis Kritis: Efek Placebo, Keterbatasan Kernel & Legalitas</H2>
+      <P>
+        Bagian ini mendokumentasikan analisis kritis terhadap keterbatasan optimasi User-Space pada sistem operasi Windows modern.
+        Analisis ini disusun berdasarkan evaluasi akademis oleh dosen pembimbing dan studi literatur arsitektur kernel Windows.
+      </P>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <Pill color="var(--orange)" title='Fenomena "Efek Placebo" pada Optimasi Sistem'>
+          Optimasi User-Space memberikan peningkatan performa yang terukur namun bersifat <strong>kontekstual dan sementara</strong>.
+          Windows Kernel Scheduler (<code>ntoskrnl.exe</code>) memiliki mekanisme <strong>Dynamic Priority Boost</strong> yang
+          secara otomatis menaikkan/menurunkan prioritas thread berdasarkan status foreground/background dan kebutuhan I/O.
+          Oleh karena itu, perubahan prioritas oleh aplikasi User-Space dapat di-<em>override</em> oleh kernel kapan saja
+          demi menjaga stabilitas sistem secara keseluruhan — mirip analogi "disiram air panas saat kedinginan,
+          hangat sesaat lalu kembali dingin".
+        </Pill>
+
+        <Pill color="var(--red)" title="Risiko Priority Inversion & Thread Starvation">
+          Menurunkan prioritas proses latar belakang ke <code>BelowNormal</code> berisiko menyebabkan <strong>Priority Inversion</strong>.
+          Game modern bergantung pada proses eksternal (audio driver, peripheral driver, jaringan).
+          If proses pendukung ini "kelaparan" CPU (<em>thread starvation</em>), game utama yang menunggu respons mereka
+          akan ikut terhambat — menyebabkan <em>stuttering</em>, <em>audio crackling</em>, dan <em>input delay</em>.
+          Solusi mitigasi: proteksi otomatis terhadap 90+ proses kritis (peripheral, audio, launcher, anti-cheat).
+        </Pill>
+
+        <Pill color="var(--accent)" title="Komparasi: Xiaomi Game Turbo vs TruE ScripT">
+          Xiaomi Game Turbo pada Android bekerja sebagai <strong>System Service Orchestrator</strong> di User-Space
+          menggunakan API resmi Android (Linux <code>cgroups</code> dan <code>nice values</code>).
+          TruE ScripT menggunakan pendekatan identik untuk Windows: bertindak sebagai orkestrator yang menyesuaikan
+          <code>PriorityClass</code>, <code>NtSetTimerResolution</code>, dan <code>MMCSS Registry</code> melalui
+          Win32 API resmi. Keduanya <strong>tidak memodifikasi kernel</strong> dan perubahan bersifat reversibel.
+        </Pill>
+
+        <Pill color="var(--green)" title="Batasan Legal & Kepatuhan Sistem Operasi">
+          TruE ScripT dirancang dengan kepatuhan penuh terhadap aturan Windows:
+          (1) Hanya menggunakan <strong>Win32 API publik yang terdokumentasi</strong> oleh Microsoft (<code>SetPriorityClass</code>,
+          <code>NtSetTimerResolution</code>, Registry API).
+          (2) <strong>Tidak memodifikasi kernel</strong> (Ring 0) — mencegah BSOD dan pelanggaran PatchGuard.
+          (3) <strong>Kompatibel dengan Anti-Cheat</strong> — tidak melakukan memory injection, DLL hooking,
+          atau modifikasi proses game (aman dari Vanguard, EAC, BattlEye).
+          (4) Semua perubahan <strong>100% reversibel</strong> dan tidak meninggalkan sisa modifikasi permanen.
+        </Pill>
+      </div>
+
+      <div style={{ height: 15 }} />
+      <Table headers={['Aspek', 'User-Space (TruE ScripT)', 'Kernel-Space (Driver/Ring 0)']} rows={[
+        ['Otoritas', 'Terbatas pada API publik Win32', 'Akses penuh ke seluruh sistem'],
+        ['Risiko BSOD', '✅ Tidak mungkin', '❌ Sangat tinggi jika ada bug'],
+        ['Anti-Cheat', '✅ Kompatibel (tidak terdeteksi)', '❌ Akan diblokir/banned'],
+        ['Persistensi', 'Sementara (auto-restore)', 'Permanen sampai uninstall'],
+        ['Dynamic Override', 'Kernel bisa override kapan saja', 'Kontrol penuh'],
+        ['Legalitas Windows', '✅ Sesuai EULA Microsoft', '❌ Melanggar PatchGuard'],
+        ['Instalasi Driver', 'Tidak perlu', 'Perlu sertifikat digital'],
+        ['Contoh Setara', 'Xiaomi Game Turbo, Razer Cortex', 'Vanguard Anti-Cheat, Driver GPU'],
+      ]} />
+    </section>
+
     {/* ── FOOTER ── */}
     <div style={{ borderTop: '1px solid var(--border)', paddingTop: 15, marginTop: 30, textAlign: 'center' }}>
       <p style={{ color: 'var(--text-muted)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-        TruE ScripT Documentation Engine · v1.0 · 13 Sections · 8 Diagrams
+        TruE ScripT Documentation Engine · v1.0 · 14 Sections · 8 Diagrams
       </p>
     </div>
   </div>
