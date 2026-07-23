@@ -344,7 +344,7 @@ export const StatusFeed: React.FC = () => {
             letterSpacing: '0.04em',
             fontWeight: 500
           }}>
-            truescript::log
+            corepriority::log
           </span>
 
           {/* Live indicator */}

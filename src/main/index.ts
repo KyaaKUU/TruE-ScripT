@@ -10,7 +10,7 @@ import { registerPowerShellHandlers, executeRestoreSnapshot, destroyPsProcess, r
 // Fix 2: disable GPU shader disk cache (not needed for a desktop scheduler app)
 // IMPORTANT: setPath and commandLine switches MUST be called before app.whenReady()
 const localAppData = process.env.LOCALAPPDATA || join(app.getPath('home'), 'AppData', 'Local')
-app.setPath('userData', join(localAppData, 'TruE ScripT'))
+app.setPath('userData', join(localAppData, 'CorePriority Optimizer'))
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 app.commandLine.appendSwitch('disk-cache-size', '0')
 
@@ -66,7 +66,7 @@ function createWindow(): BrowserWindow {
       mainWindow!.hide()
       tray?.displayBalloon?.({
         iconType: 'info',
-        title: 'TruE ScripT',
+        title: 'CorePriority Optimizer',
         content: 'Still running in the background. Right-click the tray icon to quit.'
       })
     }
@@ -100,13 +100,13 @@ function createTray(): void {
   }
 
   tray = new Tray(icon)
-  tray.setToolTip('TruE ScripT — Gaming Priority Scheduler')
+  tray.setToolTip('CorePriority Optimizer — Gaming Priority Scheduler')
 
   const updateTrayMenu = () => {
     const watcherRunning = watcherInterval !== null
     const contextMenu = Menu.buildFromTemplate([
       {
-        label: 'TruE ScripT',
+        label: 'CorePriority Optimizer',
         enabled: false
       },
       { type: 'separator' },
@@ -239,7 +239,7 @@ async function performShutdown(): Promise<void> {
 
 // ─── App Bootstrap ────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.truescript.app')
+  electronApp.setAppUserModelId('com.corepriority.app')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)

@@ -1,9 +1,9 @@
 {
-  "name": "true-script",
+  "name": "corepriority",
   "version": "1.0.0",
-  "description": "TruE ScripT - Gaming Priority Scheduler",
+  "description": "CorePriority Optimizer - Gaming Priority Scheduler",
   "main": "./out/main/index.js",
-  "author": "TruE ScripT",
+  "author": "CorePriority",
   "homepage": ".",
   "scripts": {
     "dev": "electron-vite dev",
@@ -15,7 +15,6 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^4.0.0",
-    "mermaid": "^11.4.0",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
@@ -35,8 +34,8 @@
     "vite": "^6.2.1"
   },
   "build": {
-    "appId": "com.truescript.app",
-    "productName": "TruE ScripT",
+    "appId": "com.corepriority.app",
+    "productName": "CorePriority Optimizer",
     "directories": {
       "output": "dist"
     },
@@ -51,7 +50,6 @@
     },
     "files": [
       "out/**/*",
-      "resources/**/*",
       "LOGO.png"
     ]
   }

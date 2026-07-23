@@ -43,7 +43,7 @@ export const PROTECTED = new Set([
   'rtss','msi afterburner','hwinfo64','hwinfo32','gpuz','cpuz',
   'fraps','fpsmon',
   // ── Self-Protection ────────────────────────────────────────────────────────
-  'electron','truescript','true script','true-script',
+  'electron','corepriority','core priority','true script','true-script',
   // ── Windows Shell & System ─────────────────────────────────────────────────
   'searchhost','startmenuexperiencehost','shellexperiencehost',
   'searchprotocolhost','searchfilterhost','searchindexer',
@@ -111,7 +111,7 @@ export const OptimizeControls: React.FC = () => {
     const unsubShutdown = window.api.onShutdownStarted(() => {
       setIsShuttingDown(true)
       addStatusEntry({
-        pid: 0, name: 'truescript', status: 'pending',
+        pid: 0, name: 'corepriority', status: 'pending',
         message: '[SHUTDOWN] initiating graceful shutdown…'
       })
     })
@@ -119,7 +119,7 @@ export const OptimizeControls: React.FC = () => {
     const unsubRestoring = window.api.onRestoringBeforeQuit(() => {
       setIsRestoring(true)
       addStatusEntry({
-        pid: 0, name: 'truescript', status: 'pending',
+        pid: 0, name: 'corepriority', status: 'pending',
         message: '[SHUTDOWN] restoring all priorities before quit…'
       })
     })
@@ -127,7 +127,7 @@ export const OptimizeControls: React.FC = () => {
     const unsubRestoreComplete = window.api.onRestoreComplete(() => {
       setIsRestoring(false)
       addStatusEntry({
-        pid: 0, name: 'truescript', status: 'success',
+        pid: 0, name: 'corepriority', status: 'success',
         message: '[SHUTDOWN] restore complete — quitting'
       })
     })
@@ -149,8 +149,6 @@ export const OptimizeControls: React.FC = () => {
     setIsOptimizing(true)
     clearStatusFeed()
 
-    // Capture "Before" metrics for thesis documentation
-    const gameBefore = processes.find(p => p.pid === selectedGamePid)
 
     const snap: SnapshotEntry[] = processes
       .filter(p => !isProtected(p.name, p.pid))
@@ -164,14 +162,14 @@ export const OptimizeControls: React.FC = () => {
     const totalTargets = bgProcs.length + 1
 
     // Phase 1: Init
-    addStatusEntry({ pid: 0, name: 'truescript', status: 'pending',
+    addStatusEntry({ pid: 0, name: 'corepriority', status: 'pending',
       message: `[INIT] preset=${preset.toUpperCase()} · ${totalTargets} processes targeted · snapshot saved` })
 
     // Phase 2: Plan summary
     const presetMap = {
       minimum: 'game=AboveNormal · bg=Normal · 0.5ms timer',
       normal:  'game=High · bg=Normal · 0.5ms timer · sys profile',
-      maximum: 'game=High · bg=BelowNormal · High Perf plan'
+      maximum: 'game=High · bg=BelowNormal · sys profile'
     }
     addStatusEntry({ pid: 0, name: 'scheduler', status: 'pending',
       message: `[PLAN] ${presetMap[preset]}` })
@@ -221,211 +219,16 @@ export const OptimizeControls: React.FC = () => {
       const ok      = results.filter(r => r.success).length
       const failed  = results.filter(r => !r.success && !r.skipped).length
       const skipped = results.filter(r => r.skipped).length
-      addStatusEntry({ pid: 0, name: 'truescript', status: 'success',
+      addStatusEntry({ pid: 0, name: 'corepriority', status: 'success',
         message: `[DONE] ${ok} set · ${failed} err · ${skipped} skip · elapsed=${elapsed}ms` })
 
       setIsOptimized(true)
-
-      // ─── Generate Performance Documentation Report ───
-      const tEnd = new Date()
-      const tEndStr = tEnd.toLocaleString()
-      const tEndISO = tEnd.toISOString()
-      const gameAfter = processes.find(p => p.pid === selectedGamePid) || gameBefore
-      const reportElapsed = Math.round(performance.now() - t0)
-
-      // Compute deltas
-      const cpuBefore = gameBefore?.cpu || 0
-      const cpuAfter = gameAfter?.cpu || 0
-      const cpuDelta = cpuAfter - cpuBefore
-      const ramBefore = gameBefore?.ram || 0
-      const ramAfter = gameAfter?.ram || 0
-      const ramDelta = ramAfter - ramBefore
-
-      // Priority mapping
-      const newPriority = preset === 'minimum' ? 'Above Normal' : 'High'
-      const oldPriority = gameBefore?.priority || 'Normal'
-
-      // Background process stats
-      const totalBg = bgProcs.length
-      const bgSuccess = results.filter(r => r.pid !== selectedGamePid && r.success).length
-      const bgSkipped = results.filter(r => r.pid !== selectedGamePid && r.skipped).length
-      const bgFailed  = results.filter(r => r.pid !== selectedGamePid && !r.success && !r.skipped).length
-
-      // Preset config details
-      const presetDetails: Record<string, { gamePri: string; bgPri: string; timer: string; mmcss: boolean; sysResp: number }> = {
-        minimum: { gamePri: 'AboveNormal', bgPri: 'Normal', timer: '0.5ms', mmcss: false, sysResp: 20 },
-        normal:  { gamePri: 'High',        bgPri: 'Normal', timer: '0.5ms', mmcss: true,  sysResp: 20 },
-        maximum: { gamePri: 'High',        bgPri: 'BelowNormal', timer: '0.5ms', mmcss: true, sysResp: 10 }
-      }
-      const pCfg = presetDetails[preset]
-
-      // Game display name
-      const gameDisplayName = KNOWN_GAMES[selectedGameName!.toLowerCase().replace('.exe', '')] || selectedGameName
-
-      // Build per-process result table
-      const bgResultRows = results
-        .filter(r => r.pid !== selectedGamePid)
-        .slice(0, 25)
-        .map(r => {
-          const statusIcon = r.success ? '✅' : r.skipped ? '⏭️' : '❌'
-          const statusText = r.success ? 'Optimized' : r.skipped
-            ? (r.reason === 'SKIPPED:NO_ACCESS' ? 'Restricted (skipped)'
-              : r.reason === 'Protected' ? 'Protected (skipped)'
-              : r.reason === 'NOT_FOUND' ? 'Not Found (skipped)'
-              : (r.reason || 'Skipped'))
-            : (r.reason || 'Failed')
-          const newPri = r.success ? (preset === 'maximum' ? 'BelowNormal' : 'Normal') : '—'
-          return `| ${r.name} | ${r.pid} | ${statusIcon} ${statusText} | ${newPri} |`
-        }).join('\n')
-
-      // Arrow indicator helpers
-      const deltaIcon = (val: number) => val > 0 ? '▲' : val < 0 ? '▼' : '●'
-      const deltaSign = (val: number) => val > 0 ? '+' : ''
-
-      const reportContent =
-`# 📊 TruE ScripT — Session Optimization Report
-
-> **Generated:** ${tEndStr}
-> **Timestamp:** \`${tEndISO}\`
-> **Engine Version:** TruE ScripT v1.0 — Hybrid Electron/React/PowerShell
-
----
-
-## 1. 🖥️ Session Environment
-
-| Parameter | Value |
-| :--- | :--- |
-| **Report ID** | \`TSR-${tEnd.getTime()}\` |
-| **Session Date** | ${tEnd.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} |
-| **Session Time** | ${tEnd.toLocaleTimeString()} |
-| **Optimization Preset** | \`${preset.toUpperCase()}\` |
-| **Execution Duration** | ${reportElapsed}ms |
-| **Total Processes Targeted** | ${totalTargets} |
-
----
-
-## 2. 🎮 Target Process
-
-| Property | Detail |
-| :--- | :--- |
-| **Game Title** | ${gameDisplayName} |
-| **Process Name** | \`${selectedGameName}\` |
-| **Process ID (PID)** | \`${selectedGamePid}\` |
-| **Priority Before** | ${oldPriority} |
-| **Priority After** | **${newPriority}** |
-| **CPU at Capture** | ${cpuBefore}% |
-| **RAM at Capture** | ${ramBefore} MB |
-
----
-
-## 3. 📈 Performance Metrics (Before vs After)
-
-| Metric | Before | After | Delta | Indicator |
-| :--- | ---: | ---: | ---: | :---: |
-| **CPU Usage** | ${cpuBefore}% | ${cpuAfter}% | ${deltaSign(cpuDelta)}${cpuDelta.toFixed(1)}% | ${deltaIcon(cpuDelta)} |
-| **RAM Usage** | ${ramBefore} MB | ${ramAfter} MB | ${deltaSign(ramDelta)}${ramDelta.toFixed(1)} MB | ${deltaIcon(ramDelta)} |
-| **Process Priority** | ${oldPriority} | ${newPriority} | — | ▲ Boosted |
-| **Timer Resolution** | 15.6ms (default) | 0.5ms | -15.1ms | ▲ Improved |
-| **Scheduler Tick** | Standard | High Precision | — | ▲ Enhanced |
-
-> **Catatan:** CPU dan RAM di-capture pada saat proses optimasi dimulai. Untuk perbandingan akurat, jalankan benchmark sebelum dan sesudah optimasi.
-
----
-
-## 4. ⚙️ Background Process Optimization
-
-**Summary:** ${totalBg} proses background ditargetkan
-
-| Status | Count |
-| :--- | ---: |
-| ✅ Berhasil di-optimasi | ${bgSuccess} |
-| ⏭️ Dilewati (protected/not found) | ${bgSkipped} |
-| ❌ Gagal | ${bgFailed} |
-
-### Detail Per-Proses (max 25)
-
-| Process Name | PID | Status | New Priority |
-| :--- | ---: | :--- | :--- |
-${bgResultRows || '| — | — | Tidak ada proses background | — |'}
-
----
-
-## 5. 🔧 System-Level Tweaks Applied
-
-### Preset Configuration: \`${preset.toUpperCase()}\`
-
-| Tweak | Status | Technical Detail |
-| :--- | :---: | :--- |
-| **Windows Timer Resolution** | ✅ Applied | \`NtSetTimerResolution(5000, true)\` → 0.5ms tick |
-| **MMCSS System Profile** | ${pCfg.mmcss ? '✅ Applied' : '⬜ Skipped'} | ${pCfg.mmcss ? `SystemResponsiveness = ${pCfg.sysResp}, Games Priority = 6` : 'Tidak aktif pada preset MINIMUM'} |
-| **Game Priority Boost** | ✅ Applied | \`PriorityClass = ${pCfg.gamePri}\` |
-| **Background Throttle** | ✅ Applied | \`PriorityClass = ${pCfg.bgPri}\` untuk proses non-protected |
-| **SystemResponsiveness** | ${pCfg.mmcss ? '✅ Applied' : '⬜ Skipped'} | ${pCfg.mmcss ? `HKLM\\\\...\\\\SystemProfile → ${pCfg.sysResp}% CPU reserved for background` : 'Default (20%)'} |
-
-### Penjelasan Teknis
-
-- **Timer Resolution 0.5ms:** Mengurangi jitter frame-time pada game loop. Default Windows = 15.6ms, yang menyebabkan micro-stuttering.
-- **MMCSS (Multimedia Class Scheduler Service):** Memberikan prioritas CPU scheduling khusus untuk kategori "Games" di Windows.
-- **SystemResponsiveness:** Mengontrol persentase CPU yang dialokasikan untuk background tasks. Nilai lebih rendah = lebih banyak CPU untuk game.
-
----
-
-## 6. 📋 Optimization Timeline
-
-| Phase | Action | Duration |
-| :--- | :--- | ---: |
-| **INIT** | Snapshot saved, preset loaded | ~1ms |
-| **PLAN** | Strategy: game=${pCfg.gamePri}, bg=${pCfg.bgPri} | ~1ms |
-| **EXEC** | PowerShell batch script dispatched | ~${Math.max(reportElapsed - 50, 10)}ms |
-| **SET** | Priority classes applied via Win32 API | included |
-| **SYS** | Timer + MMCSS + Registry tweaks | included |
-| **WATCH** | Backend watcher started (PID ${selectedGamePid}) | ongoing |
-| **TOTAL** | End-to-end optimization | **${reportElapsed}ms** |
-
----
-
-## 7. 🛡️ Security Audit
-
-| Check | Result |
-| :--- | :--- |
-| **Protected Process Filter** | ✅ ${PROTECTED.size} system processes protected |
-| **PID < 1000 Guard** | ✅ Kernel-level processes excluded |
-| **Explorer.exe Protection** | ✅ Shell process untouched |
-| **LSASS/CSRSS Protection** | ✅ Security subsystem untouched |
-| **Self-Protection** | ✅ Electron/TruE ScripT excluded |
-| **Auto-Restore Watcher** | ✅ Active — will restore on game exit |
-| **Graceful Shutdown** | ✅ Restore-before-quit enabled |
-
----
-
-## 8. 📝 Kesimpulan
-
-Optimasi berhasil dilakukan pada proses **${gameDisplayName}** (\`${selectedGameName}\`, PID \`${selectedGamePid}\`) menggunakan preset **${preset.toUpperCase()}** dalam waktu **${reportElapsed}ms**.
-
-**Perubahan utama:**
-- 🎯 Priority game dinaikkan dari **${oldPriority}** → **${newPriority}**
-- ⏱️ Timer resolution diubah dari **15.6ms** → **0.5ms** (pengurangan 96.8%)
-- 📉 ${bgSuccess} proses background berhasil di-throttle
-- 🛡️ ${PROTECTED.size} proses sistem dilindungi dari modifikasi
-${pCfg.mmcss ? `- 🎵 MMCSS Games profile diaktifkan (SystemResponsiveness = ${pCfg.sysResp}%)` : ''}
-- 👁️ Backend watcher aktif untuk auto-restore saat game ditutup
-
----
-
-*Automated documentation by TruE ScripT Optimization Engine*
-*Report generated at ${tEndISO}*`
-
-      const reportResult = await window.api.saveReport(reportContent)
-      if (reportResult?.success && reportResult.path) {
-        addStatusEntry({ pid: 0, name: 'truescript', status: 'success', 
-          message: `[DOCS] session report saved: ${reportResult.path.split('\\').pop()}` })
-      }
 
       // Phase 6: System-level stability features applied
       const stabilityMap: Record<string, string> = {
         minimum: `[SYS] 0.5ms timer set`,
         normal:  `[SYS] 0.5ms timer · Games system profile`,
-        maximum: `[SYS] 0.5ms timer · Games system profile · High Perf plan`
+        maximum: `[SYS] 0.5ms timer · Games system profile`
       }
       addStatusEntry({ pid: 0, name: 'system', status: 'success',
         message: stabilityMap[preset] })
@@ -437,7 +240,7 @@ ${pCfg.mmcss ? `- 🎵 MMCSS Games profile diaktifkan (SystemResponsiveness = ${
 
     } catch (err) {
       const elapsed = Math.round(performance.now() - t0)
-      addStatusEntry({ pid: 0, name: 'truescript', status: 'failed',
+      addStatusEntry({ pid: 0, name: 'corepriority', status: 'failed',
         message: `[FATAL] ${String(err)} (${elapsed}ms)` })
     } finally {
       setIsOptimizing(false)
@@ -451,7 +254,7 @@ ${pCfg.mmcss ? `- 🎵 MMCSS Games profile diaktifkan (SystemResponsiveness = ${
     setIsRestoring(true)
 
     const t0 = performance.now()
-    addStatusEntry({ pid: 0, name: 'truescript', status: 'pending',
+    addStatusEntry({ pid: 0, name: 'corepriority', status: 'pending',
       message: `[RESTORE] reverting ${snapshot.length} processes to original state` })
     addStatusEntry({ pid: 0, name: 'powershell', status: 'pending',
       message: `[EXEC] restore batch → ${snapshot.filter(e => !isProtected(e.name, e.pid)).length} processes` })
@@ -490,13 +293,13 @@ ${pCfg.mmcss ? `- 🎵 MMCSS Games profile diaktifkan (SystemResponsiveness = ${
       const ok      = results.filter(r => r.success).length
       const failed  = results.filter(r => !r.success && !r.skipped).length
       const skipped = results.filter(r => r.skipped).length
-      addStatusEntry({ pid: 0, name: 'truescript', status: 'success',
+      addStatusEntry({ pid: 0, name: 'corepriority', status: 'success',
         message: `[DONE] ${ok} restored · ${failed} err · ${skipped} skip · elapsed=${elapsed}ms` })
       addStatusEntry({ pid: 0, name: 'system', status: 'success',
         message: `[RST] 0.5ms timer released → 15.6ms · SystemResponsiveness → 20 · net throttle restored` })
     } catch (err) {
       const elapsed = Math.round(performance.now() - t0)
-      addStatusEntry({ pid: 0, name: 'truescript', status: 'failed',
+      addStatusEntry({ pid: 0, name: 'corepriority', status: 'failed',
         message: `[FATAL] ${String(err)} (${elapsed}ms)` })
     } finally {
       clearSnapshot()

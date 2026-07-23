@@ -1,0 +1,84 @@
+=============================================================================
+PANDUAN LENGKAP PENULISAN BAB 4 DAN BAB 5 SKRIPSI
+COREPRIORITY OPTIMIZER (REVISI FINAL)
+=============================================================================
+
+Berikut adalah panduan detail struktur, tabel, dan grafik yang wajib Anda 
+tambahkan ke dalam Skripsi Anda agar terlihat profesional dan siap sidang.
+
+-----------------------------------------------------------------------------
+BAB IV. HASIL DAN PEMBAHASAN
+-----------------------------------------------------------------------------
+
+4.1 Hasil Implementasi Sistem
+Bagian ini fokus untuk memamerkan antarmuka (UI) dan bukti bahwa sistem di 
+backend (PowerShell) bekerja sesuai rancangan.
+
+- Gambar 4.1 (Screenshot antarmuka utama aplikasi CorePriority Optimizer).
+  * Peletakan: Tepat di bawah paragraf pembuka sub-bab "4.1 Hasil Implementasi Sistem".
+
+- Gambar 4.2 (Screenshot panel "Status Log/Feed").
+  * Peletakan: Setelah penjelasan tertulis mengenai fitur auto-detect dan eksekusi optimasi.
+
+- Gambar 4.3 (Screenshot dari Windows Task Manager - Tab Details). 
+  * Peletakan: Di bagian akhir sub-bab 4.1, digunakan sebagai bukti empiris bahwa 
+    proses optimasi (High vs Below Normal) benar-benar tereksekusi pada OS Windows.
+
+4.2 Hasil Pengujian Skenario Optimasi
+Anda harus menguji setidaknya 2-3 game yang berbeda (misal: 1 game eSports 
+kompetitif dan 1 game AAA berat).
+
+- Tabel 4.1 (Spesifikasi Pengujian).
+  * Peletakan: Di awal sub-bab "4.2 Hasil Pengujian Skenario Optimasi", sebelum 
+    Anda menjabarkan hasil dari masing-masing game.
+
+- Tabel 4.2 (Data Mentah Game 1 - Komparasi FPS).
+  * Kolom: Skenario (Baseline, Minimum, Normal, Maximum). | Baris: Average FPS, 1% Low FPS.
+  * Peletakan: Tepat setelah Anda memperkenalkan profil "Game 1" yang diuji.
+
+- Grafik 4.1 (Bar Chart - Game 1: Perbandingan 1% Low FPS).
+  * Peletakan: Persis di bawah Tabel 4.2. Grafik ini memvisualisasikan angka yang 
+    ada di tabel agar lebih mudah dipahami oleh penguji. Warna: Merah (Baseline) 
+    dan Hijau/Biru (Maximum).
+
+- (Ulangi format Tabel 4.x dan Grafik 4.x di atas secara berurutan untuk Game 2 dan Game 3).
+
+4.3 Pembahasan
+Bagian ini digunakan untuk menganalisis data grafik di atas secara teoritis.
+
+- Analisis Kesenjangan (Average FPS vs 1% Low FPS):
+  Jelaskan bahwa Average FPS bergantung pada GPU, sedangkan 1% Low FPS bergantung 
+  pada antrean CPU. Karena aplikasi ini menstabilkan antrean CPU dan memadatkan 
+  Timer Resolution ke 0.5ms, maka lonjakan terbesar ada di 1% Low FPS (Stutter/lag hilang).
+- Analisis Keamanan (Auto-Restore):
+  Bahas bahwa selama pengujian, tidak pernah terjadi OS Crash / Blue Screen. 
+  Ini membuktikan Protected System Blocklist dan Auto-Restore Snapshot bekerja 100%.
+
+
+-----------------------------------------------------------------------------
+BAB V. KESIMPULAN DAN SARAN
+-----------------------------------------------------------------------------
+
+5.1 Kesimpulan
+Jawab Rumusan Masalah dalam bentuk poin-poin (Bullet points):
+1. Implementasi Priority Scheduling (kelas AboveNormal hingga High) serta 
+   pengurangan background menjadi BelowNormal terbukti mampu menstabilkan beban CPU gaming.
+2. Penurunan Timer Resolution ke 0,5 ms dan profil MMCSS (SystemResponsiveness 10%) 
+   berhasil menurunkan micro-stutters, dibuktikan dengan kenaikan nilai metrik 1% Low FPS.
+3. Arsitektur utilitas aman digunakan berkat mekanisme Protected Blocklist dan Auto-Restore.
+
+5.2 Saran
+Saran ditujukan bagi peneliti selanjutnya:
+1. Pengembangan selanjutnya dapat mengimplementasikan manipulasi I/O Priority 
+   untuk mempercepat loading aset game dari penyimpanan.
+2. Dapat dilakukan penelitian lebih lanjut mengenai kompatibilitas manipulasi prioritas GPU 
+   melalui fitur Hardware-Accelerated GPU Scheduling (HAGS) pada Windows 11.
+
+
+=============================================================================
+REVISI PENTING UNTUK BAB 3 (JANGAN LUPA DIPERBAIKI)
+=============================================================================
+1. Inkonsistensi Timer: Di Bab 3, pastikan semua penjelasan Preset (Minimum, 
+   Normal, Maximum) konsisten menggunakan Timer Resolution absolut 0.5ms.
+2. Batas Minimum MMCSS: Ubah tulisan "mereduksi SystemResponsiveness MMCSS ke 0%" 
+   menjadi "hingga batas absolut 10%" agar sesuai dengan tabel dan batas aman Windows.

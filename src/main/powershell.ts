@@ -50,7 +50,7 @@ const PROTECTED_PROCESSES = new Set([
   'rtss', 'msi afterburner', 'hwinfo64', 'hwinfo32', 'gpuz', 'cpuz',
   'fraps', 'fpsmon',
   // ── Self-Protection ────────────────────────────────────────────────────────
-  'electron', 'truescript', 'true script', 'true-script',
+  'electron', 'corepriority', 'core priority', 'true script', 'true-script',
   // ── Windows Shell & System ─────────────────────────────────────────────────
   'searchhost', 'startmenuexperiencehost', 'shellexperiencehost',
   'searchprotocolhost', 'searchfilterhost', 'searchindexer',
@@ -82,7 +82,7 @@ interface PendingJob {
 let psProcess: ReturnType<typeof spawn> | null = null
 let stdoutBuffer = ''
 const pendingJobs: PendingJob[] = []
-const JOB_SENTINEL = '__TRUESCRIPT_DONE__'
+const JOB_SENTINEL = '__COREPRIORITY_DONE__'
 
 function ensurePsProcess(): void {
   if (psProcess && !psProcess.killed) return
@@ -162,7 +162,7 @@ Write-Output '${JOB_SENTINEL}'
 
 /** Fallback: isolated one-shot powershell.exe via a temp .ps1 file */
 async function runPowerShellIsolated(script: string, timeoutMs = 20000): Promise<string> {
-  const tmpFile = join(tmpdir(), `truescript_${Date.now()}_${Math.random().toString(36).slice(2)}.ps1`)
+  const tmpFile = join(tmpdir(), `corepriority_${Date.now()}_${Math.random().toString(36).slice(2)}.ps1`)
   try {
     writeFileSync(tmpFile, script, 'utf8')
     const { stdout } = await execFileAsync('powershell.exe', [
@@ -436,17 +436,6 @@ $results | ConvertTo-Json -Compress -Depth 2
     return executeRestoreSnapshot(snapshot)
   })
 
-  // ── Save session report to file ───────────────────────────────────────────
-  ipcMain.handle('ps:saveReport', async (_event, content: string) => {
-    try {
-      const fileName = `Session-Report-${new Date().getTime()}.md`
-      const filePath = join(process.cwd(), fileName)
-      writeFileSync(filePath, content, 'utf8')
-      return { success: true, path: filePath }
-    } catch (err) {
-      return { success: false, error: String(err) }
-    }
-  })
 }
 
 // ─── Exported restore function (used by both IPC handler + background watcher) ─

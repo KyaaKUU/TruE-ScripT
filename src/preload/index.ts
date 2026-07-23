@@ -81,8 +81,6 @@ const api = {
   maximizeWindow: () => ipcRenderer.send('window:maximize'),
   closeWindow: () => ipcRenderer.send('window:close'),
 
-  // ── Session reports ────────────────────────────────────────────────────────
-  saveReport: (content: string) => ipcRenderer.invoke('ps:saveReport', content)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to renderer

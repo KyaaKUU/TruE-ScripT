@@ -50,8 +50,7 @@ interface AppAPI {
   // ── Shutdown ────────────────────────────────────────────────────────────────
   shutdownApp: () => void
 
-  // ── Session reports ─────────────────────────────────────────────────────────
-  saveReport: (content: string) => Promise<{ success: boolean; path?: string; error?: string }>
+
 
   // ── Backend event subscriptions (return unsubscribe fn) ────────────────────
   onWatcherStarted: (cb: (data: { pid: number }) => void) => () => void

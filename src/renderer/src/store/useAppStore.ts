@@ -54,9 +54,6 @@ export interface AppState {
   // ── Status feed ───────────────────────────────────────────────────────────
   statusFeed: StatusFeedEntry[]
 
-  // ── UI state ──────────────────────────────────────────────────────────────
-  isDocOpen: boolean
-
   // ── Actions ───────────────────────────────────────────────────────────────
   setProcesses: (processes: ProcessInfo[]) => void
   setIsScanning: (v: boolean) => void
@@ -81,7 +78,7 @@ export interface AppState {
   addStatusEntry: (entry: Omit<StatusFeedEntry, 'id' | 'timestamp'>) => void
   clearStatusFeed: () => void
 
-  setIsDocOpen: (v: boolean) => void
+
 }
 
 // ─── Known game executables (auto-detect list) ────────────────────────────────
@@ -172,7 +169,7 @@ export const useAppStore = create<AppState>((set) => ({
   isShuttingDown: false,
 
   statusFeed: [],
-  isDocOpen: false,
+
 
   // actions
   setProcesses: (processes) => set({ processes }),
@@ -207,5 +204,5 @@ export const useAppStore = create<AppState>((set) => ({
     })),
 
   clearStatusFeed: () => set({ statusFeed: [] }),
-  setIsDocOpen: (v) => set({ isDocOpen: v })
+
 }))
