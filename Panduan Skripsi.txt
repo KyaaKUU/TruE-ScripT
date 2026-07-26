@@ -78,7 +78,7 @@ Saran ditujukan bagi peneliti selanjutnya:
 =============================================================================
 REVISI PENTING UNTUK BAB 3 (JANGAN LUPA DIPERBAIKI)
 =============================================================================
-1. Inkonsistensi Timer: Di Bab 3, pastikan semua penjelasan Preset (Minimum, 
-   Normal, Maximum) konsisten menggunakan Timer Resolution absolut 0.5ms.
+1. Inkonsistensi Timer: Di Bab 3, pastikan penjelasan Preset Normal dan Maximum
+   konsisten menggunakan Timer Resolution 0.5ms (Preset Minimum tidak menggunakan manipulasi timer agar lebih aman dan mengurangi overhead).
 2. Batas Minimum MMCSS: Ubah tulisan "mereduksi SystemResponsiveness MMCSS ke 0%" 
-   menjadi "hingga batas absolut 10%" agar sesuai dengan tabel dan batas aman Windows.
+   menjadi "hingga batas absolut 14%" agar sesuai dengan pembaruan backend dan mencegah worker thread starvation pada game.

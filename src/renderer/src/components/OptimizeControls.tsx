@@ -167,9 +167,9 @@ export const OptimizeControls: React.FC = () => {
 
     // Phase 2: Plan summary
     const presetMap = {
-      minimum: 'game=AboveNormal · bg=Normal · 0.5ms timer',
+      minimum: 'game=AboveNormal · bg=Normal',
       normal:  'game=High · bg=Normal · 0.5ms timer · sys profile',
-      maximum: 'game=High · bg=BelowNormal · sys profile'
+      maximum: 'game=High · bg=Normal · 0.5ms timer · sys profile · child shield'
     }
     addStatusEntry({ pid: 0, name: 'scheduler', status: 'pending',
       message: `[PLAN] ${presetMap[preset]}` })
@@ -226,7 +226,7 @@ export const OptimizeControls: React.FC = () => {
 
       // Phase 6: System-level stability features applied
       const stabilityMap: Record<string, string> = {
-        minimum: `[SYS] 0.5ms timer set`,
+        minimum: `[SYS] no system-level changes applied`,
         normal:  `[SYS] 0.5ms timer · Games system profile`,
         maximum: `[SYS] 0.5ms timer · Games system profile`
       }

@@ -259,15 +259,15 @@ $global:lastSnap = $currentSnap
     const config = {
       minimum: {
         gamePriority: 'AboveNormal', bgPriority: 'Normal',
-        timerRes: true, sysProfile: false, sysResp: 20
+        timerRes: false, sysProfile: false, sysResp: 20
       },
       normal: {
         gamePriority: 'High', bgPriority: 'Normal',
         timerRes: true, sysProfile: true, sysResp: 20
       },
       maximum: {
-        gamePriority: 'High', bgPriority: 'BelowNormal',
-        timerRes: true, sysProfile: true, sysResp: 10
+        gamePriority: 'High', bgPriority: 'Normal',
+        timerRes: true, sysProfile: true, sysResp: 14
       }
     }
     const cfg = config[preset]
@@ -288,6 +288,18 @@ $global:lastSnap = $currentSnap
     const script = `
 $pidList = '${psJsonArray}' | ConvertFrom-Json
 $results = @()
+
+# ════════════════════════════════════════════════════════════════════
+# PHASE 0 — Identify game child processes (pre-filter)
+# Game helper processes (shader compilers, asset loaders) share 
+# the same parent PID. They must NOT be demoted.
+# ════════════════════════════════════════════════════════════════════
+$gameChildPids = @{}
+try {
+  $gamePid = $pidList[0].pid
+  Get-CimInstance Win32_Process -Filter "ParentProcessId = $gamePid" -ErrorAction SilentlyContinue | 
+    ForEach-Object { $gameChildPids[$_.ProcessId] = $true }
+} catch {}
 
 # ════════════════════════════════════════════════════════════════════
 # ACCESS PRE-CHECK — Test process handle before modifying priority
@@ -320,6 +332,11 @@ public class TruEAccessCheck {
 foreach ($entry in $pidList) {
   $pid2   = $entry.pid
   $pri    = $entry.priority
+  
+  if ($gameChildPids.ContainsKey($pid2)) {
+    $pri = $pidList[0].priority
+  }
+  
   $status = "PENDING"
   try {
     if ($pid2 -lt 1000) {
